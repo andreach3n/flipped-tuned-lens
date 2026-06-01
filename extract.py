@@ -30,7 +30,7 @@ for data in ds:
     tokens = tokens[:, :model.cfg.n_ctx] # crop to context window
 
     with t.no_grad():
-        logits, cache = model.run_with_cache(tokens)
+        logits, cache = model.run_with_cache(tokens, names_filter=["hook_embed", "blocks.13.hook_resid_post"])
 
     embeddings.append(cache["hook_embed"].squeeze(0).cpu())
     middle_layer.append(cache["blocks.13.hook_resid_post"].squeeze(0).cpu())

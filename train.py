@@ -2,8 +2,8 @@ import torch as t
 import torch.nn as nn
 import torch.optim as optim
 
-embd = t.load("./embeddings.pt")
-mid_lay = t.load("./middle_layer.pt")
+embd = t.load("./embeddings.pt", weights_only=False)
+mid_lay = t.load("./middle_layer.pt", weights_only=False)
 
 embd_cat = t.cat(embd, dim=0)
 mid_lay_cat = t.cat(mid_lay, dim=0)
@@ -21,7 +21,12 @@ embd_test = embd_shuffled[train_index:, :]
 mid_lay_test = mid_lay_shuffled[train_index:, :]
 
 # linear map
-linear_layer = nn.Linear(embd_train.shape[1], mid_lay_train.shape[1])
+device = t.device("cuda" if t.cuda.is_available() else "cpu")
+linear_layer = nn.Linear(embd_train.shape[1], mid_lay_train.shape[1]).to(device)
+embd_train = embd_train.to(device)
+mid_lay_train = mid_lay_train.to(device)
+embd_test = embd_test.to(device)
+mid_lay_test = mid_lay_test.to(device)
 
 # training loop
 optimizer = optim.Adam(linear_layer.parameters(), lr=0.001)
