@@ -2,11 +2,11 @@ import torch as t
 import torch.nn as nn
 import torch.optim as optim
 
-embd = t.load("./embeddings.pt", weights_only=False)
-mid_lay = t.load("./middle_layer.pt", weights_only=False)
+embd = t.load("/workspace/embeddings.pt", weights_only=False)
+mid_lay = t.load("/workspace/middle_layer.pt", weights_only=False)
 
-embd_cat = t.cat(embd, dim=0)
-mid_lay_cat = t.cat(mid_lay, dim=0)
+embd_cat = t.cat(embd, dim=0).float()
+mid_lay_cat = t.cat(mid_lay, dim=0).float()
 
 # randomly shuffle the concatenated tensors
 random_ind = t.randperm(len(embd_cat))
@@ -43,4 +43,4 @@ for epoch in range(10):
 
     print(f"Epoch {epoch}, train loss: {train_loss.item()}, test loss: {test_loss.item()}, R^2: {r2}")
 
-t.save(linear_layer.state_dict(), "./linear_map.pt")
+t.save(linear_layer.state_dict(), "/workspace/linear_map.pt")
