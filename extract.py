@@ -29,6 +29,7 @@ count = 0
 embeddings = []
 layer_activations = {l: [] for l in LAYERS}
 names_filter = ["hook_embed"] + [f"blocks.{l}.hook_resid_post" for l in layer_activations]
+chunk = 0
 
 print("Starting data loop...")
 for data in ds:
@@ -50,9 +51,20 @@ for data in ds:
     t.cuda.empty_cache()
 
     count+=tokens.shape[1]
+
+    if count // 100000 > chunk:
+        chunk = count // 100000
+        print(f"Saving checkpoint at {count} tokens...")
+        t.save(embeddings, f"/workspace/embeddings_chunk_{chunk}.pt")
+        for l in LAYERS:
+            t.save(layer_activations[l], f"/workspace/layer_{l}_chunk_{chunk}.pt")
+        embeddings = []
+        layer_activations = {l: [] for l in LAYERS}
+
     if count >= MAX_TOKENS:
         break
 
-t.save(embeddings, "/workspace/embeddings.pt")
-for l in LAYERS:
-    t.save(layer_activations[l], f"/workspace/layer_{l}.pt")
+# this was needed when i didnt chunk save tokens
+# t.save(embeddings, "/workspace/embeddings.pt")
+# for l in LAYERS:
+#     t.save(layer_activations[l], f"/workspace/layer_{l}.pt")

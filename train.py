@@ -2,12 +2,17 @@ import torch as t
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
+import glob
 
 LAYERS = [13]
 #[1, 5, 9, 13, 17, 21, 25]
 
 # get all the embedding data out first, hold the middle layers and extract them individually to save memory
-embd = t.load("/workspace/embeddings.pt", weights_only=False)
+# embd = t.load("/workspace/embeddings.pt", weights_only=False)
+embd_chunks = sorted(glob.glob("/workspace/embeddings_chunk_*.pt"))
+embd = []
+for chunk_path in embd_chunks:
+    embd.extend(t.load(chunk_path))
 embd_cat = t.cat(embd, dim=0).float()
 
 # randomly shuffle the concatenated tensors
@@ -35,7 +40,11 @@ results = {}
 # training loop
 for lr in LR_CANDIDATES:
     for l in LAYERS:
-        mid_lay = t.load(f"/workspace/layer_{l}.pt", weights_only=False)
+        mid_lay_chunks = sorted(glob.glob(f"/workspace/layer_{l}_chunk_*.pt"))
+        mid_lay = []
+        for chunk_path in mid_lay_chunks:
+            mid_lay.extend(t.load(chunk_path))
+
         mid_lay_cat = t.cat(mid_lay, dim=0).float()
         del mid_lay
         mid_lay_shuffled = mid_lay_cat[random_ind]
@@ -74,7 +83,7 @@ for lr in LR_CANDIDATES:
             r2 = 1 - test_loss / var
 
         avg_train_loss = total_train_loss / total_steps
-        results[lr] = {"train_loss": avg_train_loss, "test_loss": test_loss.item(), "R²": r2.item()}
+        results[lr] = {"train_loss": avg_train_loss, "test_loss": test_loss.item(), "r2": r2.item()}
         # print(f"Layer {l} — train loss: {avg_train_loss}, test loss: {test_loss.item()}, R²: {r2}")
         t.save(linear_layer.state_dict(), f"/workspace/linear_map_layer_{l}.pt")
 
