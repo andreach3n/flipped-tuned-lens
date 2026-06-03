@@ -11,7 +11,9 @@ from datasets import load_dataset
 
 MODEL_NAME = "google/gemma-2-2b"
 MAX_TOKENS = 1280000
-LAYERS = [1, 5, 9, 13, 17, 21, 25]
+LAYERS = [13]
+STOP_LAYER = max(LAYERS) + 1
+# [1, 5, 9, 13, 17, 21, 25]
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -33,14 +35,14 @@ for data in ds:
     tokens = tokens[:, :model.cfg.n_ctx] # crop to context window
 
     with t.no_grad():
-        logits, cache = model.run_with_cache(tokens, names_filter=names_filter, stop_at_layer=26)
+        logits, cache = model.run_with_cache(tokens, names_filter=names_filter, stop_at_layer=STOP_LAYER)
 
     embeddings.append(cache["hook_embed"].squeeze(0).cpu())
     for l in layer_activations:
         layer_activations[l].append(cache[f"blocks.{l}.hook_resid_post"].squeeze(0).cpu())
 
     count+=tokens.shape[1]
-    if count >= MAX_TOKENS: # currently 1M tokens
+    if count >= MAX_TOKENS: 
         break
 
 t.save(embeddings, "/workspace/embeddings.pt")
