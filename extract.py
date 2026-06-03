@@ -10,7 +10,7 @@ from transformer_lens.hook_points import HookPoint
 from datasets import load_dataset
 
 MODEL_NAME = "google/gemma-2-2b"
-MAX_TOKENS = 1000000
+MAX_TOKENS = 1280000
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
