@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 import glob
+import matplotlib.pyplot as plt
 
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
 
@@ -46,6 +47,8 @@ lr = 1e-2
 
 # training loop
 # for lr in LR_CANDIDATES:
+
+for_plotting = {}
 for l in LAYERS:
     mid_lay_chunks = sorted(glob.glob(f"/workspace/layer_{l}_chunk_*.pt"))
     mid_lay = []
@@ -105,6 +108,8 @@ for l in LAYERS:
         test_loss = total_se / (embd_test.shape[0] * mid_lay_test.shape[1])
         var = mid_lay_test.float().var()
         r2 = 1 - test_loss / var
+
+        for_plotting[l] = {"train_loss": train_loss_final, "test_loss": test_loss, "r2": r2.item()}
         # test_loss = t.nn.functional.mse_loss(linear_layer(embd_test), mid_lay_test)
         # var = mid_lay_test.var()
         # r2 = 1 - test_loss / var
@@ -117,3 +122,18 @@ for l in LAYERS:
 # for testing learning rates
 # for lr, metrics in results.items():
 #     print(f"LR: {lr} — train: {metrics['train_loss']}, test: {metrics['test_loss']}, R²: {metrics['r2']}")
+
+layers = list(for_plotting.keys())
+r2_values = [for_plotting[l]["r2"] for l in layers]
+
+plt.figure(figsize=(8, 5))
+plt.plot(layers, r2_values, marker='o', linewidth=2, markersize=8, color='steelblue')
+plt.xlabel("Layer", fontsize=13)
+plt.ylabel("Test $R^2$", fontsize=13)
+plt.title("Linear Map from Embeddings → Layer Activations", fontsize=14)
+plt.xticks(layers)
+plt.ylim(0, 1)
+plt.grid(True, alpha=0.3)
+plt.tight_layout()
+plt.savefig("/workspace/r2_by_layer.png", dpi=150)
+print("Saved to /workspace/r2_by_layer.png")
