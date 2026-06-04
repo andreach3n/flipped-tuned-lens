@@ -11,7 +11,7 @@ from datasets import load_dataset
 
 MODEL_NAME = "google/gemma-2-2b"
 MAX_TOKENS = 1280000
-LAYERS = [13]
+LAYERS = [1, 5, 9, 17, 21, 25]
 STOP_LAYER = max(LAYERS) + 1
 # [1, 5, 9, 13, 17, 21, 25]
 
