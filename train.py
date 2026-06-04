@@ -41,7 +41,7 @@ N_TRAIN = embd_train.shape[0]
 total_steps = N_TRAIN // BATCH_SIZE
 warmup_steps = int(0.05 * total_steps)
 
-LR_CANDIDATES = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2]
+LR_CANDIDATES = [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 5e-2]
 results = {}
 
 # training loop
