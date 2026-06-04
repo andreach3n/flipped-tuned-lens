@@ -34,6 +34,7 @@ device = t.device("cuda" if t.cuda.is_available() else "cpu")
 embd_train = embd_train.to(device)
 embd_test = embd_test.to(device)
 del embd_shuffled
+del embd_cat
 
 BATCH_SIZE = 128
 N_TRAIN = embd_train.shape[0]
@@ -59,6 +60,7 @@ for lr in LR_CANDIDATES:
         mid_lay_train = mid_lay_shuffled[:train_index, :].to(device)
         mid_lay_test = mid_lay_shuffled[train_index:, :].to(device)
         del mid_lay_shuffled
+        del mid_lay_cat
 
         linear_layer = nn.Linear(embd_train.shape[1], mid_lay_train.shape[1]).to(device)
         optimizer = optim.Adam(linear_layer.parameters(), lr=lr)
