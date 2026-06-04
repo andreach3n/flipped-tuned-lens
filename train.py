@@ -31,8 +31,8 @@ embd_test = embd_shuffled[train_index:, :]
 
 # linear map
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
-embd_train = embd_train.to(device)
-embd_test = embd_test.to(device)
+embd_train = embd_train
+embd_test = embd_test
 del embd_shuffled
 del embd_cat
 
@@ -56,9 +56,9 @@ for lr in LR_CANDIDATES:
         del mid_lay
         mid_lay_shuffled = mid_lay_cat[random_ind]
 
-        # train test split, put on cuda
-        mid_lay_train = mid_lay_shuffled[:train_index, :].to(device)
-        mid_lay_test = mid_lay_shuffled[train_index:, :].to(device)
+        # train test split
+        mid_lay_train = mid_lay_shuffled[:train_index, :]
+        mid_lay_test = mid_lay_shuffled[train_index:, :]
         del mid_lay_shuffled
         del mid_lay_cat
 
@@ -76,8 +76,8 @@ for lr in LR_CANDIDATES:
             batch_start = step * BATCH_SIZE
             batch_end = (step + 1) * BATCH_SIZE
 
-            embd_batch = embd_train[batch_start: batch_end]
-            target_batch = mid_lay_train[batch_start:batch_end]
+            embd_batch = embd_train[batch_start: batch_end].to(device)
+            target_batch = mid_lay_train[batch_start:batch_end].to(device)
 
             optimizer.zero_grad()
             train_loss = t.nn.functional.mse_loss(linear_layer(embd_batch), target_batch)
@@ -89,8 +89,8 @@ for lr in LR_CANDIDATES:
         with t.no_grad():
             total_se = 0
             for i in range(0, embd_test.shape[0], BATCH_SIZE):
-                embd_batch = embd_test[i:i+BATCH_SIZE]
-                mid_lay_batch = mid_lay_test[i:i+BATCH_SIZE]
+                embd_batch = embd_test[i:i+BATCH_SIZE].to(device)
+                mid_lay_batch = mid_lay_test[i:i+BATCH_SIZE].to(device)
                 se = ((linear_layer(embd_batch)-mid_lay_batch)**2).sum() # compute squared error
                 total_se += se.item()
             test_loss = total_se / (embd_test.shape[0] * mid_lay_test.shape[1])
