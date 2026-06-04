@@ -16,7 +16,7 @@ for chunk_path in embd_chunks:
     print(f"Loading {chunk_path}...")
     embd.extend(t.load(chunk_path))
 print("Concatenating embeddings...")
-embd_cat = t.cat(embd, dim=0).float()
+embd_cat = t.cat(embd, dim=0)
 del embd
 print(f"embd_cat shape: {embd_cat.shape}")
 
@@ -52,7 +52,7 @@ for lr in LR_CANDIDATES:
         for chunk_path in mid_lay_chunks:
             mid_lay.extend(t.load(chunk_path))
 
-        mid_lay_cat = t.cat(mid_lay, dim=0).float()
+        mid_lay_cat = t.cat(mid_lay, dim=0)
         del mid_lay
         mid_lay_shuffled = mid_lay_cat[random_ind]
 
@@ -76,8 +76,8 @@ for lr in LR_CANDIDATES:
             batch_start = step * BATCH_SIZE
             batch_end = (step + 1) * BATCH_SIZE
 
-            embd_batch = embd_train[batch_start: batch_end].to(device)
-            target_batch = mid_lay_train[batch_start:batch_end].to(device)
+            embd_batch = embd_train[batch_start: batch_end].to(device).float()
+            target_batch = mid_lay_train[batch_start:batch_end].to(device).float()
 
             optimizer.zero_grad()
             train_loss = t.nn.functional.mse_loss(linear_layer(embd_batch), target_batch)
