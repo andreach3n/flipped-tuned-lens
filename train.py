@@ -9,11 +9,16 @@ LAYERS = [13]
 
 # get all the embedding data out first, hold the middle layers and extract them individually to save memory
 # embd = t.load("/workspace/embeddings.pt", weights_only=False)
+print("Loading embedding chunks...")
 embd_chunks = sorted(glob.glob("/workspace/embeddings_chunk_*.pt"))
 embd = []
 for chunk_path in embd_chunks:
+    print(f"Loading {chunk_path}...")
     embd.extend(t.load(chunk_path))
+print("Concatenating embeddings...")
 embd_cat = t.cat(embd, dim=0).float()
+del embd
+print(f"embd_cat shape: {embd_cat.shape}")
 
 # randomly shuffle the concatenated tensors
 random_ind = t.randperm(len(embd_cat))
@@ -28,6 +33,7 @@ embd_test = embd_shuffled[train_index:, :]
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 embd_train = embd_train.to(device)
 embd_test = embd_test.to(device)
+del embd_shuffled
 
 BATCH_SIZE = 128
 N_TRAIN = embd_train.shape[0]
@@ -52,6 +58,7 @@ for lr in LR_CANDIDATES:
         # train test split, put on cuda
         mid_lay_train = mid_lay_shuffled[:train_index, :].to(device)
         mid_lay_test = mid_lay_shuffled[train_index:, :].to(device)
+        del mid_lay_shuffled
 
         linear_layer = nn.Linear(embd_train.shape[1], mid_lay_train.shape[1]).to(device)
         optimizer = optim.Adam(linear_layer.parameters(), lr=lr)
