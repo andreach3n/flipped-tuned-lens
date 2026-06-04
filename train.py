@@ -87,8 +87,8 @@ for lr in LR_CANDIDATES:
         with t.no_grad():
             total_se = 0
             for i in range(0, embd_test.shape[0], BATCH_SIZE):
-                embd_batch = embd_test[i, i+BATCH_SIZE]
-                mid_lay_batch = mid_lay_test[i, i+BATCH_SIZE]
+                embd_batch = embd_test[i:i+BATCH_SIZE]
+                mid_lay_batch = mid_lay_test[i:i+BATCH_SIZE]
                 se = ((linear_layer(embd_batch)-mid_lay_batch)**2).sum() # compute squared error
                 total_se += se.item()
             test_loss = total_se / (embd_test.shape[0] * mid_lay_test.shape[1])
@@ -99,7 +99,7 @@ for lr in LR_CANDIDATES:
             # r2 = 1 - test_loss / var
 
         avg_train_loss = total_train_loss / total_steps
-        results[lr] = {"train_loss": avg_train_loss, "test_loss": test_loss.item(), "r2": r2.item()}
+        results[lr] = {"train_loss": avg_train_loss, "test_loss": test_loss, "r2": r2.item()}
         # print(f"Layer {l} — train loss: {avg_train_loss}, test loss: {test_loss.item()}, R²: {r2}")
         t.save(linear_layer.state_dict(), f"/workspace/linear_map_layer_{l}.pt")
 
