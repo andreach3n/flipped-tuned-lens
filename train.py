@@ -89,8 +89,8 @@ for lr in LR_CANDIDATES:
         with t.no_grad():
             total_se = 0
             for i in range(0, embd_test.shape[0], BATCH_SIZE):
-                embd_batch = embd_test[i:i+BATCH_SIZE].to(device)
-                mid_lay_batch = mid_lay_test[i:i+BATCH_SIZE].to(device)
+                embd_batch = embd_test[i:i+BATCH_SIZE].to(device).float()
+                mid_lay_batch = mid_lay_test[i:i+BATCH_SIZE].to(device).float()
                 se = ((linear_layer(embd_batch)-mid_lay_batch)**2).sum() # compute squared error
                 total_se += se.item()
             test_loss = total_se / (embd_test.shape[0] * mid_lay_test.shape[1])
