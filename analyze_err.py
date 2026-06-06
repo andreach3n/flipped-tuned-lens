@@ -31,13 +31,14 @@ linear_map = {}
 for layer in linear_layers:
     l = int(layer.split("layer_")[1][:-3])
     linear_map[l] = nn.Linear(model.cfg.d_model, model.cfg.d_model).to(device)
-    linear_map[l].load_state_dict(t.load(layer))
+    linear_map[l].load_state_dict(t.load(layer, weights_only=False))
 
 position_error_sum = {l: t.zeros(512).to(device) for l in LAYERS}
 position_error_count = {l: t.zeros(512).to(device) for l in LAYERS}
 token_error_sum = {l: t.zeros(model.cfg.vocab_size).to(device) for l in LAYERS}
 token_error_count = {l: t.zeros(model.cfg.vocab_size).to(device) for l in LAYERS}
 count = 0
+ones = t.ones(512, device=device)
 
 for data in ds:
     tokens = model.to_tokens(data["text"]).to(device)
@@ -61,7 +62,7 @@ for data in ds:
 
         token_ids = tokens.squeeze(0)
         token_error_sum[l].index_add_(0, token_ids, err)
-        token_error_count[l].index_add_(0, token_ids, t.ones(T, device=device))
+        token_error_count[l].index_add_(0, token_ids, ones[:T])
 
     del cache, logits
     t.cuda.empty_cache()
@@ -75,6 +76,9 @@ token_mean = {l: None for l in LAYERS}
 for l in LAYERS:
     position_mean[l] = t.where(position_error_count[l] > 0, position_error_sum[l] / position_error_count[l], t.zeros_like(position_error_sum[l]))
     token_mean[l] = t.where(token_error_count[l] > 0, token_error_sum[l] / token_error_count[l], t.zeros_like(token_error_sum[l]))
+
+del position_error_sum, position_error_count, token_error_sum, token_error_count
+t.cuda.empty_cache()
 
 # plot position mean
 plt.figure(figsize=(10, 6))
