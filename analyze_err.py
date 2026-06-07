@@ -11,41 +11,59 @@ from transformer_lens.hook_points import HookPoint
 from datasets import load_dataset
 import matplotlib.pyplot as plt
 
+def log(msg):
+    print(msg, flush=True)
+
 MODEL_NAME = "google/gemma-2-2b"
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
 STOP_LAYER = max(LAYERS)+1
 MAX_TOKENS = 100000
 
+log("Loading dataset...")
 ds = load_dataset("Skylion007/openwebtext", split="train", streaming=True)
 ds = ds.skip(5000)
+log("Dataset loaded.")
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
+log(f"Using device: {device}")
+log("Loading model...")
 model = HookedTransformer.from_pretrained_no_processing(MODEL_NAME, dtype=t.bfloat16).to(device)
 model.eval()
+log("Model loaded.")
 
 layer_activations = {l: None for l in LAYERS}
 names_filter = ["hook_embed"] + [f"blocks.{l}.hook_resid_post" for l in layer_activations]
 
+log("Loading linear maps...")
 linear_layers = sorted(glob.glob(f"/workspace/linear_map_layer_*.pt"))
+log(f"Found {len(linear_layers)} linear map files: {linear_layers}")
 linear_map = {}
 for layer in linear_layers:
     l = int(layer.split("layer_")[1][:-3])
+    log(f"  Loading linear map for layer {l}...")
     linear_map[l] = nn.Linear(model.cfg.d_model, model.cfg.d_model).to(device)
     linear_map[l].load_state_dict(t.load(layer, weights_only=False))
+log("All linear maps loaded.")
 
+log("Allocating accumulators...")
+log(f"  d_vocab={model.cfg.d_vocab}, d_model={model.cfg.d_model}")
 position_error_sum = {l: t.zeros(512).to(device) for l in LAYERS}
 position_error_count = {l: t.zeros(512).to(device) for l in LAYERS}
 token_error_sum = {l: t.zeros(model.cfg.d_vocab).to(device) for l in LAYERS}
 token_error_count = {l: t.zeros(model.cfg.d_vocab).to(device) for l in LAYERS}
 count = 0
 ones = t.ones(512, device=device)
+log("Accumulators ready. Starting main loop...")
 
-for data in ds:
+for i, data in enumerate(ds):
     tokens = model.to_tokens(data["text"]).to(device)
     tokens = tokens[:, :512]
 
     if tokens.shape[1] < 10:
         continue
+
+    if i % 50 == 0:
+        log(f"  Step {i}, tokens so far: {count}, GPU mem: {t.cuda.memory_allocated(device)/1e9:.2f}GB")
 
     with t.no_grad():
         logits, cache = model.run_with_cache(tokens, names_filter=names_filter, stop_at_layer=STOP_LAYER)
@@ -69,7 +87,10 @@ for data in ds:
 
     count += tokens.shape[1]
     if count > MAX_TOKENS:
+        log(f"Reached {count} tokens, stopping loop.")
         break
+
+log("Loop complete. Computing means...")
 
 position_mean = {l: None for l in LAYERS}
 token_mean = {l: None for l in LAYERS}
