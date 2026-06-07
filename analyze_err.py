@@ -83,7 +83,7 @@ t.cuda.empty_cache()
 # plot position mean
 plt.figure(figsize=(10, 6))
 for l in LAYERS:
-    plt.plot(position_mean[l].cpu().numpy(), label=f"Layer {l}")
+    plt.plot(position_mean[l].cpu().detach().numpy(), label=f"Layer {l}")
 plt.xlabel("Position in sequence")
 plt.ylabel("Mean error magnitude")
 plt.title("Error by position in sequence")
@@ -99,7 +99,7 @@ plt.figure(figsize=(14, 6))
 for l in LAYERS:
     top_values, top_indices = t.topk(token_mean[l], TOP_N)
     top_tokens = [model.to_string(idx.unsqueeze(0)) for idx in top_indices]
-    plt.bar(top_tokens, top_values.cpu().numpy(), label=f"Layer {l}", alpha=0.5)
+    plt.bar(top_tokens, top_values.cpu().detach().numpy(), label=f"Layer {l}", alpha=0.5)
 plt.xlabel("Token")
 plt.ylabel("Mean error magnitude")
 plt.title("Top tokens by error magnitude")
