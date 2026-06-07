@@ -3,7 +3,6 @@ import torch.nn as nn
 import glob
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-import numpy as np
 from transformer_lens import HookedTransformer
 from datasets import load_dataset
 
@@ -18,21 +17,21 @@ STOP_LAYER = max(LAYERS) + 1
 # Try to include the same word in different senses across sentences.
 
 SENTENCES = [
-    "She walked along the bank of the river, watching the water rush past.",
-    "The next morning she visited the bank to deposit her paycheck.",
-    "After the crash, the plane had to bank sharply to the left.",
+    # bank
+    "She spent the afternoon sitting on the muddy bank, watching the river flow past.",
+    "She spent the afternoon standing outside the bank, waiting for it to open.",
 
-    "He struck a match to light the candle on the table.",
-    "The bag was surprisingly light, easy to carry with one hand.",
-    "The evening light filtered through the curtains and cast long shadows.",
+    # light
+    "At dusk, the warm light from the lamp cast long shadows across the wall.",
+    "At dusk, the surprisingly light suitcase was easy to lift into the overhead bin.",
 
-    "She decided to go for a run before breakfast every morning.",
-    "The candidate chose to run for office despite the long odds.",
-    "After a long run in the theater, the play finally closed on Saturday.",
+    # run
+    "Each morning before breakfast, her run through the park helped clear her mind.",
+    "Each morning before breakfast, her run of the financial models took about an hour.",
 
-    "The scientist warned that lead pipes were still common in older buildings.",
-    "She would lead the expedition through the mountains in early spring.",
-    "The detective followed every lead until the case was finally solved.",
+    # lead
+    "The inspector confirmed that the pipes were made of lead and posed a health risk.",
+    "The inspector was chosen to lead the team through the hazardous building safely.",
 ]
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
@@ -103,18 +102,9 @@ def plot_heatmap(token_strs, errors, title, save_path):
 
     fig, ax = plt.subplots(figsize=(max(10, T * 0.5), num_layers * 0.8 + 1.5))
 
-    # normalize each layer independently so colors are comparable within a layer
     err_np = errors.detach().numpy()  # [num_layers, T]
-    err_normalized = np.zeros_like(err_np)
-    for i in range(num_layers):
-        row = err_np[i]
-        row_min, row_max = row.min(), row.max()
-        if row_max > row_min:
-            err_normalized[i] = (row - row_min) / (row_max - row_min)
-        else:
-            err_normalized[i] = 0.0
 
-    im = ax.imshow(err_normalized, cmap="RdYlGn_r", aspect="auto", vmin=0, vmax=1)
+    im = ax.imshow(err_np, cmap="RdYlGn_r", aspect="auto")
 
     # x-axis: token strings
     ax.set_xticks(range(T))
@@ -127,7 +117,7 @@ def plot_heatmap(token_strs, errors, title, save_path):
     ax.set_title(title, fontsize=12, pad=10)
 
     cbar = plt.colorbar(im, ax=ax, orientation="vertical", fraction=0.02, pad=0.04)
-    cbar.set_label("Normalized error (within layer)", fontsize=8)
+    cbar.set_label("Error magnitude (L2)", fontsize=8)
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches="tight")
