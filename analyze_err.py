@@ -35,8 +35,8 @@ for layer in linear_layers:
 
 position_error_sum = {l: t.zeros(512).to(device) for l in LAYERS}
 position_error_count = {l: t.zeros(512).to(device) for l in LAYERS}
-token_error_sum = {l: t.zeros(model.cfg.vocab_size).to(device) for l in LAYERS}
-token_error_count = {l: t.zeros(model.cfg.vocab_size).to(device) for l in LAYERS}
+token_error_sum = {l: t.zeros(model.cfg.d_vocab).to(device) for l in LAYERS}
+token_error_count = {l: t.zeros(model.cfg.d_vocab).to(device) for l in LAYERS}
 count = 0
 ones = t.ones(512, device=device)
 
