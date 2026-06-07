@@ -68,9 +68,9 @@ for i, data in enumerate(ds):
     with t.no_grad():
         logits, cache = model.run_with_cache(tokens, names_filter=names_filter, stop_at_layer=STOP_LAYER)
 
-    embd = cache["hook_embed"].squeeze(0).to(device).float()
+    embd = cache["hook_embed"].squeeze(0)[1:].to(device).float()  # skip BOS
     for l in layer_activations:
-        layer_activations[l] = cache[f"blocks.{l}.hook_resid_post"].squeeze(0).to(device).float()
+        layer_activations[l] = cache[f"blocks.{l}.hook_resid_post"].squeeze(0)[1:].to(device).float()
         pred = linear_map[l](embd)
         err = t.linalg.vector_norm(pred - layer_activations[l], dim=1) # pred - layer_activations[l] is [T, d_model], so you shrink down to [T]
 
@@ -78,7 +78,7 @@ for i, data in enumerate(ds):
         position_error_sum[l][:T] += err
         position_error_count[l][:T] += 1
 
-        token_ids = tokens.squeeze(0)
+        token_ids = tokens.squeeze(0)[1:]  # skip BOS
         token_error_sum[l].index_add_(0, token_ids, err)
         token_error_count[l].index_add_(0, token_ids, ones[:T])
 

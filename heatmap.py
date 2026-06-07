@@ -71,22 +71,22 @@ def compute_token_errors(sentence):
     with t.no_grad():
         logits, cache = model.run_with_cache(tokens, names_filter=names_filter, stop_at_layer=STOP_LAYER)
 
-    embd = cache["hook_embed"].squeeze(0).to(device).float()  # [T, d_model]
+    embd = cache["hook_embed"].squeeze(0)[1:].to(device).float()  # [T-1, d_model], skip BOS
 
     errors = []
     for l in LAYERS:
-        h = cache[f"blocks.{l}.hook_resid_post"].squeeze(0).to(device).float()  # [T, d_model]
-        pred = linear_map[l](embd)                                               # [T, d_model]
-        err = t.linalg.vector_norm(pred - h, dim=1)                             # [T]
+        h = cache[f"blocks.{l}.hook_resid_post"].squeeze(0)[1:].to(device).float()  # [T-1, d_model], skip BOS
+        pred = linear_map[l](embd)                                                    # [T-1, d_model]
+        err = t.linalg.vector_norm(pred - h, dim=1)                                  # [T-1]
         errors.append(err.cpu())
 
     del cache, logits
     t.cuda.empty_cache()
 
-    errors = t.stack(errors, dim=0)  # [num_layers, T]
+    errors = t.stack(errors, dim=0)  # [num_layers, T-1]
 
-    # convert token ids back to strings
-    token_ids = tokens.squeeze(0)  # [T]
+    # convert token ids back to strings, skip BOS
+    token_ids = tokens.squeeze(0)[1:]  # [T-1]
     token_strs = [model.to_string(tid.unsqueeze(0)) for tid in token_ids]
 
     return token_strs, errors
