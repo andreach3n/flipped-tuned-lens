@@ -134,10 +134,13 @@ def plot_heatmap(token_strs, errors, title, save_path):
 
 # ── Main ───────────────────────────────────────────────────────────────────────
 
+import os
+os.makedirs("/workspace/heatmaps", exist_ok=True)
+
 for idx, sentence in enumerate(SENTENCES):
     log(f"Processing sentence {idx+1}/{len(SENTENCES)}: {sentence[:60]}...")
     token_strs, errors = compute_token_errors(sentence)
-    save_path = f"/workspace/heatmap_{idx+1:02d}.png"
+    save_path = f"/workspace/heatmaps/heatmap_{idx+1:02d}.png"
     plot_heatmap(token_strs, errors, title=sentence, save_path=save_path)
 
-log("All heatmaps saved to /workspace/heatmap_*.png")
+log("All heatmaps saved to /workspace/heatmaps/")
