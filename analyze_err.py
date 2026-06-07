@@ -114,18 +114,32 @@ plt.tight_layout()
 plt.savefig("/workspace/error_by_position.png", dpi=150)
 plt.close()
 
-TOP_N = 30
+# TOP_N = 30
 
-plt.figure(figsize=(14, 6))
-for l in LAYERS:
+# plt.figure(figsize=(14, 6))
+# for l in LAYERS:
+#     top_values, top_indices = t.topk(token_mean[l], TOP_N)
+#     top_tokens = [model.to_string(idx.unsqueeze(0)) for idx in top_indices]
+#     plt.bar(top_tokens, top_values.cpu().detach().numpy(), label=f"Layer {l}", alpha=0.5)
+# plt.xlabel("Token")
+# plt.ylabel("Mean error magnitude")
+# plt.title("Top tokens by error magnitude")
+# plt.xticks(rotation=45, ha="right")
+# plt.legend()
+# plt.tight_layout()
+# plt.savefig("/workspace/error_by_token.png", dpi=150)
+# plt.close()
+
+TOP_N = 15
+fig, axes = plt.subplots(len(LAYERS), 1, figsize=(10, 4 * len(LAYERS)))
+
+for ax, l in zip(axes, LAYERS):
     top_values, top_indices = t.topk(token_mean[l], TOP_N)
     top_tokens = [model.to_string(idx.unsqueeze(0)) for idx in top_indices]
-    plt.bar(top_tokens, top_values.cpu().detach().numpy(), label=f"Layer {l}", alpha=0.5)
-plt.xlabel("Token")
-plt.ylabel("Mean error magnitude")
-plt.title("Top tokens by error magnitude")
-plt.xticks(rotation=45, ha="right")
-plt.legend()
+    ax.barh(top_tokens[::-1], top_values.cpu().detach().numpy()[::-1])
+    ax.set_title(f"Layer {l} — Top {TOP_N} tokens by error magnitude")
+    ax.set_xlabel("Mean error magnitude")
+
 plt.tight_layout()
 plt.savefig("/workspace/error_by_token.png", dpi=150)
 plt.close()
