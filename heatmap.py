@@ -103,8 +103,16 @@ def plot_heatmap(token_strs, errors, title, save_path):
     fig, ax = plt.subplots(figsize=(max(10, T * 0.5), num_layers * 0.8 + 1.5))
 
     err_np = errors.detach().numpy()  # [num_layers, T]
+    err_normalized = err_np.copy()
+    for i in range(num_layers):
+        row = err_np[i]
+        row_min, row_max = row.min(), row.max()
+        if row_max > row_min:
+            err_normalized[i] = (row - row_min) / (row_max - row_min)
+        else:
+            err_normalized[i] = 0.0
 
-    im = ax.imshow(err_np, cmap="RdYlGn_r", aspect="auto")
+    im = ax.imshow(err_normalized, cmap="RdYlGn_r", aspect="auto", vmin=0, vmax=1)
 
     # x-axis: token strings
     ax.set_xticks(range(T))
@@ -117,7 +125,7 @@ def plot_heatmap(token_strs, errors, title, save_path):
     ax.set_title(title, fontsize=12, pad=10)
 
     cbar = plt.colorbar(im, ax=ax, orientation="vertical", fraction=0.02, pad=0.04)
-    cbar.set_label("Error magnitude (L2)", fontsize=8)
+    cbar.set_label("Normalized error (within layer)", fontsize=8)
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches="tight")
