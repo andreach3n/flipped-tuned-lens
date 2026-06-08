@@ -108,8 +108,8 @@ def make_plot(pc_x, pc_y, filename):
             mp = results[l][piece]["means_proj"]
 
             # Scatter of all points
-            ax.scatter(proj[:, pc_x], proj[:, pc_y], c=point_colors,
-                       s=10, alpha=0.7, edgecolors="none")
+            # ax.scatter(proj[:, pc_x], proj[:, pc_y], c=point_colors,
+            #            s=10, alpha=0.7, edgecolors="none")
             # Overlay of per-day means
             mean_colors = [cmap(i) for i in range(len(day_ids_list))]
             ax.scatter(mp[:, pc_x], mp[:, pc_y], c=mean_colors, s=200,
@@ -141,7 +141,7 @@ def make_plot(pc_x, pc_y, filename):
         fontsize=10, frameon=False, bbox_to_anchor=(0.5, -0.02),
     )
 
-    fig.suptitle("PCA of day-of-week token representations across layers",
+    fig.suptitle("PCA of day-of-week mean representations across layers",
                  fontsize=13, y=1.00)
     plt.tight_layout()
     plt.savefig(filename, dpi=150, bbox_inches="tight")
@@ -149,5 +149,5 @@ def make_plot(pc_x, pc_y, filename):
     log(f"Saved to {filename}")
 
 
-make_plot(0, 1, "/workspace/pca_days_pc12_means.png")
-make_plot(1, 2, "/workspace/pca_days_pc23_means.png")
+make_plot(0, 1, "/workspace/pca_days_pc12_means_only.png")
+make_plot(1, 2, "/workspace/pca_days_pc23_means_only.png")
