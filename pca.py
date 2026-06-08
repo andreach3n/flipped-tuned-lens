@@ -114,6 +114,7 @@ def make_plot(pc_x, pc_y, filename):
             mean_colors = [cmap(i) for i in range(len(day_ids_list))]
             ax.scatter(mp[:, pc_x], mp[:, pc_y], c=mean_colors, s=200,
                        edgecolors="black", linewidths=1.5, marker="*", zorder=10)
+            ax.set_aspect("equal", adjustable="datalim")
 
             if row == 0:
                 ax.set_title(f"Layer {l}", fontsize=11)
