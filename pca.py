@@ -11,6 +11,9 @@ from transformer_lens.hook_points import HookPoint
 from datasets import load_dataset
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 D_MODEL = 2304
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
@@ -43,8 +46,81 @@ def returnMatrices(l):
 
 pca = PCA(n_components=2)
 
+results = {}
 for l in LAYERS:
     H, H_hat, residual = returnMatrices(l)
-    H_2d = pca.fit_transform(H)
-    H_hat_2d = pca.fit_transform(H_hat)
-    residual_2d = pca.fit_transform(residual)
+    results[l] = {
+        "H": PCA(n_components=2).fit_transform(H.detach().cpu().numpy()),
+        "H_hat": PCA(n_components=2).fit_transform(H_hat.detach().cpu().numpy()),
+        "E": PCA(n_components=2).fit_transform(residual.detach().cpu().numpy()),
+    }
+
+# ── Recompute PCA with variance ratios kept ──────────────────────────────
+results = {}
+for l in LAYERS:
+    H, H_hat, residual = returnMatrices(l)
+    mats = {
+        "H": H.detach().cpu().numpy(),
+        "H_hat": H_hat.detach().cpu().numpy(),
+        "E": residual.detach().cpu().numpy(),
+    }
+    results[l] = {}
+    for piece, mat in mats.items():
+        pca = PCA(n_components=2).fit(mat)
+        results[l][piece] = {
+            "proj": pca.transform(mat),
+            "var": pca.explained_variance_ratio_,
+        }
+
+# ── Per-point colors (one per day) ────────────────────────────────────────
+PIECES = ["H", "H_hat", "E"]
+PIECE_LABELS = {"H": r"Full $h^l$", "H_hat": r"Predicted $\hat{h}^l$", "E": r"Residual $e^l$"}
+
+day_ids_list = sorted(days_map.keys())                  # 7 token IDs
+id_to_idx = {tid: i for i, tid in enumerate(day_ids_list)}
+cmap = plt.get_cmap("tab10")
+point_colors = np.array([cmap(id_to_idx[tid.item()]) for tid in day_ids])
+
+# ── Plot 3 x 7 grid ───────────────────────────────────────────────────────
+n_rows, n_cols = len(PIECES), len(LAYERS)
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows))
+
+for col, l in enumerate(LAYERS):
+    for row, piece in enumerate(PIECES):
+        ax = axes[row, col]
+        proj = results[l][piece]["proj"]
+        var = results[l][piece]["var"]
+
+        ax.scatter(proj[:, 0], proj[:, 1], c=point_colors, s=10, alpha=0.7, edgecolors="none")
+
+        if row == 0:
+            ax.set_title(f"Layer {l}", fontsize=11)
+        if col == 0:
+            ax.set_ylabel(PIECE_LABELS[piece], fontsize=11)
+
+        ax.text(
+            0.02, 0.98,
+            f"PC1: {var[0]*100:.1f}%\nPC2: {var[1]*100:.1f}%",
+            transform=ax.transAxes, fontsize=7, va="top", ha="left",
+            bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.7, edgecolor="none"),
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+# ── Shared legend ─────────────────────────────────────────────────────────
+legend_handles = [
+    Line2D([0], [0], marker="o", color="w",
+           markerfacecolor=cmap(i), markersize=8,
+           label=days_map[tid].strip())
+    for i, tid in enumerate(day_ids_list)
+]
+fig.legend(
+    handles=legend_handles, loc="lower center", ncol=7,
+    fontsize=10, frameon=False, bbox_to_anchor=(0.5, -0.02),
+)
+
+fig.suptitle("PCA of day-of-week token representations across layers", fontsize=13, y=1.00)
+plt.tight_layout()
+plt.savefig("/workspace/pca_days.png", dpi=150, bbox_inches="tight")
+plt.close()
+log("Saved to /workspace/pca_days.png")
