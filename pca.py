@@ -40,6 +40,7 @@ log(f"  day_ids shape: {day_ids.shape}")
 log("Loading days_token_map.pt...")
 days_map = t.load("/workspace/days_token_map.pt", weights_only=False)
 log(f"  days_map keys: {list(days_map.keys())}")
+day_ids_list = sorted(days_map.keys())
 
 log("Loading day layer activations...")
 day_h = {}
@@ -65,12 +66,20 @@ for l in LAYERS:
         "H_hat": H_hat.detach().cpu().numpy(),
         "E": residual.detach().cpu().numpy(),
     }
+
     results[l] = {}
     for piece, mat in mats.items():
         log(f"    PCA on {piece}...")
         pca = PCA(n_components=3).fit(mat)
+        means = np.zeros((len(day_ids_list), mat.shape[1]))
+
+        for i, tid in enumerate(day_ids_list):
+            mask = (day_ids == tid).numpy()
+            means[i] = mat[mask].mean(axis=0)
+
         results[l][piece] = {
             "proj": pca.transform(mat),
+            "means_proj": pca.transform(means),
             "var": pca.explained_variance_ratio_,
         }
 log("PCA done.")
@@ -80,62 +89,65 @@ log("Building plot colors...")
 PIECES = ["H", "H_hat", "E"]
 PIECE_LABELS = {"H": r"Full $h^l$", "H_hat": r"Predicted $\hat{h}^l$", "E": r"Residual $e^l$"}
 
-day_ids_list = sorted(days_map.keys())                  # 7 token IDs
+# day_ids_list = sorted(days_map.keys())                  # 7 token IDs
 id_to_idx = {tid: i for i, tid in enumerate(day_ids_list)}
 cmap = plt.get_cmap("tab10")
 point_colors = np.array([cmap(id_to_idx[tid.item()]) for tid in day_ids])
 log(f"  point_colors shape: {point_colors.shape}")
 
-# ── Plot 3 x 7 grid ───────────────────────────────────────────────────────
-log("Plotting...")
-n_rows, n_cols = len(PIECES), len(LAYERS)
-fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows))
+def make_plot(pc_x, pc_y, filename):
+    log(f"Plotting PC{pc_x+1}/PC{pc_y+1}...")
+    n_rows, n_cols = len(PIECES), len(LAYERS)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows))
 
-for col, l in enumerate(LAYERS):
-    for row, piece in enumerate(PIECES):
-        ax = axes[row, col]
-        proj = results[l][piece]["proj"]
-        var = results[l][piece]["var"]
+    for col, l in enumerate(LAYERS):
+        for row, piece in enumerate(PIECES):
+            ax = axes[row, col]
+            proj = results[l][piece]["proj"]
+            var = results[l][piece]["var"]
+            mp = results[l][piece]["means_proj"]
 
-        # ax.scatter(proj[:, 0], proj[:, 1], c=point_colors, s=10, alpha=0.7, edgecolors="none")
-        ax.scatter(proj[:, 1], proj[:, 2], c=point_colors, s=10, alpha=0.7, edgecolors="none")
+            # Scatter of all points
+            ax.scatter(proj[:, pc_x], proj[:, pc_y], c=point_colors,
+                       s=10, alpha=0.7, edgecolors="none")
+            # Overlay of per-day means
+            mean_colors = [cmap(i) for i in range(len(day_ids_list))]
+            ax.scatter(mp[:, pc_x], mp[:, pc_y], c=mean_colors, s=200,
+                       edgecolors="black", linewidths=1.5, marker="*", zorder=10)
 
-        if row == 0:
-            ax.set_title(f"Layer {l}", fontsize=11)
-        if col == 0:
-            ax.set_ylabel(PIECE_LABELS[piece], fontsize=11)
+            if row == 0:
+                ax.set_title(f"Layer {l}", fontsize=11)
+            if col == 0:
+                ax.set_ylabel(PIECE_LABELS[piece], fontsize=11)
 
-        # ax.text(
-        #     0.02, 0.98,
-        #     f"PC1: {var[0]*100:.1f}%\nPC2: {var[1]*100:.1f}%",
-        #     transform=ax.transAxes, fontsize=7, va="top", ha="left",
-        #     bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.7, edgecolor="none"),
-        # )
-        ax.text(
-            0.02, 0.98,
-            f"PC2: {var[1]*100:.1f}%\nPC3: {var[2]*100:.1f}%",
-            transform=ax.transAxes, fontsize=7, va="top", ha="left",
-            bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.7, edgecolor="none"),
-        )
-        ax.set_xticks([])
-        ax.set_yticks([])
+            ax.text(
+                0.02, 0.98,
+                f"PC{pc_x+1}: {var[pc_x]*100:.1f}%\nPC{pc_y+1}: {var[pc_y]*100:.1f}%",
+                transform=ax.transAxes, fontsize=7, va="top", ha="left",
+                bbox=dict(boxstyle="round,pad=0.2", facecolor="white",
+                          alpha=0.7, edgecolor="none"),
+            )
+            ax.set_xticks([])
+            ax.set_yticks([])
 
-log("Saving figure...")
-# ── Shared legend ─────────────────────────────────────────────────────────
-legend_handles = [
-    Line2D([0], [0], marker="o", color="w",
-           markerfacecolor=cmap(i), markersize=8,
-           label=days_map[tid].strip())
-    for i, tid in enumerate(day_ids_list)
-]
-fig.legend(
-    handles=legend_handles, loc="lower center", ncol=7,
-    fontsize=10, frameon=False, bbox_to_anchor=(0.5, -0.02),
-)
+    legend_handles = [
+        Line2D([0], [0], marker="o", color="w",
+               markerfacecolor=cmap(i), markersize=8,
+               label=days_map[tid].strip())
+        for i, tid in enumerate(day_ids_list)
+    ]
+    fig.legend(
+        handles=legend_handles, loc="lower center", ncol=7,
+        fontsize=10, frameon=False, bbox_to_anchor=(0.5, -0.02),
+    )
 
-fig.suptitle("PCA of day-of-week token representations across layers", fontsize=13, y=1.00)
-plt.tight_layout()
-# plt.savefig("/workspace/pca_days.png", dpi=150, bbox_inches="tight")
-plt.savefig("/workspace/pca_days_pc23.png", dpi=150, bbox_inches="tight")
-plt.close()
-log("Saved to /workspace/pca_days.png")
+    fig.suptitle("PCA of day-of-week token representations across layers",
+                 fontsize=13, y=1.00)
+    plt.tight_layout()
+    plt.savefig(filename, dpi=150, bbox_inches="tight")
+    plt.close()
+    log(f"Saved to {filename}")
+
+
+make_plot(0, 1, "/workspace/pca_days_pc12_means.png")
+make_plot(1, 2, "/workspace/pca_days_pc23_means.png")
