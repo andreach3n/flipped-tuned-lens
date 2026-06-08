@@ -92,10 +92,11 @@ def compute_token_errors(sentence):
 
 # ── Heatmap plotting ───────────────────────────────────────────────────────────
 
-def plot_heatmap(token_strs, errors, title, save_path):
+def plot_heatmap(token_strs, errors, title, save_path, normalize=True):
     """
     token_strs: list of T strings
     errors: tensor [num_layers, T]
+    normalize: if True, normalize each row to [0, 1] independently
     """
     num_layers = len(LAYERS)
     T = len(token_strs)
@@ -103,16 +104,21 @@ def plot_heatmap(token_strs, errors, title, save_path):
     fig, ax = plt.subplots(figsize=(max(10, T * 0.5), num_layers * 0.8 + 1.5))
 
     err_np = errors.detach().numpy()  # [num_layers, T]
-    err_normalized = err_np.copy()
-    for i in range(num_layers):
-        row = err_np[i]
-        row_min, row_max = row.min(), row.max()
-        if row_max > row_min:
-            err_normalized[i] = (row - row_min) / (row_max - row_min)
-        else:
-            err_normalized[i] = 0.0
 
-    im = ax.imshow(err_normalized, cmap="RdYlGn_r", aspect="auto", vmin=0, vmax=1)
+    if normalize:
+        data = err_np.copy()
+        for i in range(num_layers):
+            row = err_np[i]
+            row_min, row_max = row.min(), row.max()
+            if row_max > row_min:
+                data[i] = (row - row_min) / (row_max - row_min)
+            else:
+                data[i] = 0.0
+        im = ax.imshow(data, cmap="RdYlGn_r", aspect="auto", vmin=0, vmax=1)
+        cbar_label = "Normalized error (within layer)"
+    else:
+        im = ax.imshow(err_np, cmap="RdYlGn_r", aspect="auto")
+        cbar_label = "Error magnitude (L2)"
 
     # x-axis: token strings
     ax.set_xticks(range(T))
@@ -125,7 +131,7 @@ def plot_heatmap(token_strs, errors, title, save_path):
     ax.set_title(title, fontsize=12, pad=10)
 
     cbar = plt.colorbar(im, ax=ax, orientation="vertical", fraction=0.02, pad=0.04)
-    cbar.set_label("Normalized error (within layer)", fontsize=8)
+    cbar.set_label(cbar_label, fontsize=8)
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches="tight")
@@ -135,12 +141,17 @@ def plot_heatmap(token_strs, errors, title, save_path):
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 import os
-os.makedirs("/workspace/heatmaps", exist_ok=True)
+os.makedirs("/workspace/heatmaps_normalized", exist_ok=True)
+os.makedirs("/workspace/heatmaps_not_normalized", exist_ok=True)
 
 for idx, sentence in enumerate(SENTENCES):
     log(f"Processing sentence {idx+1}/{len(SENTENCES)}: {sentence[:60]}...")
     token_strs, errors = compute_token_errors(sentence)
-    save_path = f"/workspace/heatmaps/heatmap_{idx+1:02d}.png"
-    plot_heatmap(token_strs, errors, title=sentence, save_path=save_path)
+    plot_heatmap(token_strs, errors, title=sentence,
+                 save_path=f"/workspace/heatmaps_normalized/heatmap_{idx+1:02d}.png",
+                 normalize=True)
+    plot_heatmap(token_strs, errors, title=sentence,
+                 save_path=f"/workspace/heatmaps_not_normalized/heatmap_{idx+1:02d}.png",
+                 normalize=False)
 
-log("All heatmaps saved to /workspace/heatmaps/")
+log("Done. Heatmaps saved to /workspace/heatmaps_normalized/ and /workspace/heatmaps_not_normalized/")
