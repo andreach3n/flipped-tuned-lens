@@ -68,7 +68,7 @@ for l in LAYERS:
     results[l] = {}
     for piece, mat in mats.items():
         log(f"    PCA on {piece}...")
-        pca = PCA(n_components=2).fit(mat)
+        pca = PCA(n_components=3).fit(mat)
         results[l][piece] = {
             "proj": pca.transform(mat),
             "var": pca.explained_variance_ratio_,
@@ -97,16 +97,23 @@ for col, l in enumerate(LAYERS):
         proj = results[l][piece]["proj"]
         var = results[l][piece]["var"]
 
-        ax.scatter(proj[:, 0], proj[:, 1], c=point_colors, s=10, alpha=0.7, edgecolors="none")
+        # ax.scatter(proj[:, 0], proj[:, 1], c=point_colors, s=10, alpha=0.7, edgecolors="none")
+        ax.scatter(proj[:, 1], proj[:, 2], c=point_colors, s=10, alpha=0.7, edgecolors="none")
 
         if row == 0:
             ax.set_title(f"Layer {l}", fontsize=11)
         if col == 0:
             ax.set_ylabel(PIECE_LABELS[piece], fontsize=11)
 
+        # ax.text(
+        #     0.02, 0.98,
+        #     f"PC1: {var[0]*100:.1f}%\nPC2: {var[1]*100:.1f}%",
+        #     transform=ax.transAxes, fontsize=7, va="top", ha="left",
+        #     bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.7, edgecolor="none"),
+        # )
         ax.text(
             0.02, 0.98,
-            f"PC1: {var[0]*100:.1f}%\nPC2: {var[1]*100:.1f}%",
+            f"PC2: {var[1]*100:.1f}%\nPC3: {var[2]*100:.1f}%",
             transform=ax.transAxes, fontsize=7, va="top", ha="left",
             bbox=dict(boxstyle="round,pad=0.2", facecolor="white", alpha=0.7, edgecolor="none"),
         )
@@ -128,6 +135,7 @@ fig.legend(
 
 fig.suptitle("PCA of day-of-week token representations across layers", fontsize=13, y=1.00)
 plt.tight_layout()
-plt.savefig("/workspace/pca_days.png", dpi=150, bbox_inches="tight")
+# plt.savefig("/workspace/pca_days.png", dpi=150, bbox_inches="tight")
+plt.savefig("/workspace/pca_days_pc23.png", dpi=150, bbox_inches="tight")
 plt.close()
 log("Saved to /workspace/pca_days.png")
