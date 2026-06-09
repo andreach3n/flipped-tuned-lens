@@ -110,13 +110,13 @@ def make_plot(pc_x, pc_y, filename):
             mp = results[l][piece]["means_proj"]
 
             # Scatter of all points
-            ax.scatter(proj[:, pc_x], proj[:, pc_y], c=point_colors,
-                       s=10, alpha=0.7, edgecolors="none")
+            # ax.scatter(proj[:, pc_x], proj[:, pc_y], c=point_colors,
+            #            s=10, alpha=0.7, edgecolors="none")
             # Overlay of per-day means
-            # mean_colors = [cmap(i) for i in range(len(day_ids_list))]
-            # ax.scatter(mp[:, pc_x], mp[:, pc_y], c=mean_colors, s=200,
-            #            edgecolors="black", linewidths=1.5, marker="*", zorder=10)
-            # ax.set_aspect("equal", adjustable="datalim")
+            mean_colors = [cmap(i) for i in range(len(day_ids_list))]
+            ax.scatter(mp[:, pc_x], mp[:, pc_y], c=mean_colors, s=200,
+                       edgecolors="black", linewidths=1.5, marker="*", zorder=10)
+            ax.set_aspect("equal", adjustable="datalim")
 
             if row == 0:
                 ax.set_title(f"Layer {l}", fontsize=11)
@@ -152,5 +152,5 @@ def make_plot(pc_x, pc_y, filename):
     log(f"Saved to {filename}")
 
 
-make_plot(0, 1, "/workspace/pca_plots/pca_days_2_pc12.png")
-make_plot(1, 2, "/workspace/pca_plots/pca_days_2_pc23.png")
+make_plot(0, 1, "/workspace/pca_plots/pca_days_2_pc12_means_only.png")
+make_plot(1, 2, "/workspace/pca_plots/pca_days_2_pc23_means_only.png")
