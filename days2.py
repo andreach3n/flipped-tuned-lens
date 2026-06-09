@@ -50,7 +50,7 @@ templates = [
     "The party is on {day}.",
 ]
 
-texts = [t.format(day=day.strip()) for tmpl in templates for day in days]
+texts = [tmpl.format(day=day.strip()) for tmpl in templates for day in days]
 labels = [day for tmpl in templates for day in days]
 
 names_filter = ["hook_embed"] + [f"blocks.{l}.hook_resid_post" for l in LAYERS]
