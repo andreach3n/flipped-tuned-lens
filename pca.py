@@ -14,6 +14,8 @@ from sklearn.decomposition import PCA
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
+import os
+os.makedirs("/workspace/pca_plots", exist_ok=True)
 
 D_MODEL = 2304
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
@@ -30,22 +32,22 @@ for path in sorted(glob.glob("/workspace/linear_map_layer_*.pt")):
 log(f"Loaded maps for layers: {sorted(linear_map.keys())}")
 
 log("Loading day_embeddings.pt...")
-day_embds = t.load("/workspace/day_embeddings.pt", weights_only=False)
+day_embds = t.load("/workspace/day_embeddings_1.pt", weights_only=False)
 log(f"  day_embds shape: {day_embds.shape}")
 
 log("Loading day_token_ids.pt...")
-day_ids = t.load("/workspace/day_token_ids.pt", weights_only=False)
+day_ids = t.load("/workspace/day_token_ids_1.pt", weights_only=False)
 log(f"  day_ids shape: {day_ids.shape}")
 
 log("Loading days_token_map.pt...")
-days_map = t.load("/workspace/days_token_map.pt", weights_only=False)
+days_map = t.load("/workspace/days_token_map_1.pt", weights_only=False)
 log(f"  days_map keys: {list(days_map.keys())}")
 day_ids_list = sorted(days_map.keys())
 
 log("Loading day layer activations...")
 day_h = {}
 for l in LAYERS:
-    day_h[l] = t.load(f"/workspace/day_layer_{l}.pt", weights_only=False)
+    day_h[l] = t.load(f"/workspace/day_layer_{l}_1.pt", weights_only=False)
     log(f"  layer {l}: {day_h[l].shape}")
 
 def returnMatrices(l):
@@ -108,13 +110,13 @@ def make_plot(pc_x, pc_y, filename):
             mp = results[l][piece]["means_proj"]
 
             # Scatter of all points
-            # ax.scatter(proj[:, pc_x], proj[:, pc_y], c=point_colors,
-            #            s=10, alpha=0.7, edgecolors="none")
+            ax.scatter(proj[:, pc_x], proj[:, pc_y], c=point_colors,
+                       s=10, alpha=0.7, edgecolors="none")
             # Overlay of per-day means
-            mean_colors = [cmap(i) for i in range(len(day_ids_list))]
-            ax.scatter(mp[:, pc_x], mp[:, pc_y], c=mean_colors, s=200,
-                       edgecolors="black", linewidths=1.5, marker="*", zorder=10)
-            ax.set_aspect("equal", adjustable="datalim")
+            # mean_colors = [cmap(i) for i in range(len(day_ids_list))]
+            # ax.scatter(mp[:, pc_x], mp[:, pc_y], c=mean_colors, s=200,
+            #            edgecolors="black", linewidths=1.5, marker="*", zorder=10)
+            # ax.set_aspect("equal", adjustable="datalim")
 
             if row == 0:
                 ax.set_title(f"Layer {l}", fontsize=11)
@@ -150,5 +152,5 @@ def make_plot(pc_x, pc_y, filename):
     log(f"Saved to {filename}")
 
 
-make_plot(0, 1, "/workspace/pca_days_pc12_means_only.png")
-make_plot(1, 2, "/workspace/pca_days_pc23_means_only.png")
+make_plot(0, 1, "/workspace/pca_plots/pca_days_2_pc12.png")
+make_plot(1, 2, "/workspace/pca_plots/pca_days_2_pc23.png")
