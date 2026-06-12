@@ -27,27 +27,39 @@ for day in days:
     assert day_token.shape[1] == 1, f"{day!r} tokenized to {day_token.shape[1]} tokens: {day_token}"
     days_token[day_token[0][0].item()] = day
 
-templates = [
-    "Today is {day}.",
-    "Tomorrow is {day}.",
-    "Yesterday was {day}.",
-    "The meeting is on {day}.",
-    "She was born on a {day}.",
-    "The event takes place on {day}.",
-    "I have an appointment on {day}.",
-    "The deadline is {day}.",
-    "We will meet on {day}.",
-    "The package arrives on {day}.",
-    "The store is closed on {day}.",
-    "He called me on {day}.",
-    "The class is every {day}.",
-    "It happened last {day}.",
-    "See you next {day}.",
-    "The flight departs on {day}.",
-    "She left on {day}.",
-    "The report is due {day}.",
-    "It rained on {day}.",
-    "The party is on {day}.",
+# templates = [
+#     "Today is {day}.",
+#     "Tomorrow is {day}.",
+#     "Yesterday was {day}.",
+#     "The meeting is on {day}.",
+#     "She was born on a {day}.",
+#     "The event takes place on {day}.",
+#     "I have an appointment on {day}.",
+#     "The deadline is {day}.",
+#     "We will meet on {day}.",
+#     "The package arrives on {day}.",
+#     "The store is closed on {day}.",
+#     "He called me on {day}.",
+#     "The class is every {day}.",
+#     "It happened last {day}.",
+#     "See you next {day}.",
+#     "The flight departs on {day}.",
+#     "She left on {day}.",
+#     "The report is due {day}.",
+#     "It rained on {day}.",
+#     "The party is on {day}.",
+# ]
+
+templates = ["The day after {day} is",
+"The day after {day},",
+"The day after {day} she",
+"The day after {day} he",
+"The day after {day} the",
+"It was the day after {day}",
+"This was the day after {day}.",
+"That happened the day after {day}.",
+"The morning after {day} was",
+"One day after {day},",
 ]
 
 texts = [tmpl.format(day=day.strip()) for tmpl in templates for day in days]
@@ -93,15 +105,15 @@ print("Concatenating and saving...")
 all_embd = t.cat(embeddings, dim=0)          # [N, 2304]
 all_ids = t.cat(matched_ids_list, dim=0)     # [N]
 
-t.save(all_embd, "/workspace/day_embeddings_1.pt")
-t.save(all_ids, "/workspace/day_token_ids_1.pt")
+t.save(all_embd, "/workspace/day_embeddings_after.pt")
+t.save(all_ids, "/workspace/day_token_ids_after.pt")
 
 for l in LAYERS:
     all_h = t.cat(layer_activations[l], dim=0)   # [N, 2304]
-    t.save(all_h, f"/workspace/day_layer_{l}_1.pt")
+    t.save(all_h, f"/workspace/day_layer_{l}_after.pt")
     print(f"  saved layer {l}: shape {all_h.shape}")
 
 # Also save the days_token dict so you can recover labels later
-t.save(days_token, "/workspace/days_token_map_1.pt")
+t.save(days_token, "/workspace/days_token_map_after.pt")
 
 print("Done.")
