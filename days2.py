@@ -27,40 +27,40 @@ for day in days:
     assert day_token.shape[1] == 1, f"{day!r} tokenized to {day_token.shape[1]} tokens: {day_token}"
     days_token[day_token[0][0].item()] = day
 
-# templates = [
-#     "Today is {day}.",
-#     "Tomorrow is {day}.",
-#     "Yesterday was {day}.",
-#     "The meeting is on {day}.",
-#     "She was born on a {day}.",
-#     "The event takes place on {day}.",
-#     "I have an appointment on {day}.",
-#     "The deadline is {day}.",
-#     "We will meet on {day}.",
-#     "The package arrives on {day}.",
-#     "The store is closed on {day}.",
-#     "He called me on {day}.",
-#     "The class is every {day}.",
-#     "It happened last {day}.",
-#     "See you next {day}.",
-#     "The flight departs on {day}.",
-#     "She left on {day}.",
-#     "The report is due {day}.",
-#     "It rained on {day}.",
-#     "The party is on {day}.",
-# ]
-
-templates = ["The day after {day} is",
-"The day after {day},",
-"The day after {day} she",
-"The day after {day} he",
-"The day after {day} the",
-"It was the day after {day}",
-"This was the day after {day}.",
-"That happened the day after {day}.",
-"The morning after {day} was",
-"One day after {day},",
+templates = [
+    "Today is {day}.",
+    "Tomorrow is {day}.",
+    "Yesterday was {day}.",
+    "The meeting is on {day}.",
+    "She was born on a {day}.",
+    "The event takes place on {day}.",
+    "I have an appointment on {day}.",
+    "The deadline is {day}.",
+    "We will meet on {day}.",
+    "The package arrives on {day}.",
+    "The store is closed on {day}.",
+    "He called me on {day}.",
+    "The class is every {day}.",
+    "It happened last {day}.",
+    "See you next {day}.",
+    "The flight departs on {day}.",
+    "She left on {day}.",
+    "The report is due {day}.",
+    "It rained on {day}.",
+    "The party is on {day}.",
 ]
+
+# templates = ["The day after {day} is",
+# "The day after {day},",
+# "The day after {day} she",
+# "The day after {day} he",
+# "The day after {day} the",
+# "It was the day after {day}",
+# "This was the day after {day}.",
+# "That happened the day after {day}.",
+# "The morning after {day} was",
+# "One day after {day},",
+# ]
 
 texts = [tmpl.format(day=day.strip()) for tmpl in templates for day in days]
 labels = [day for tmpl in templates for day in days]
