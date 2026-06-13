@@ -105,15 +105,15 @@ print("Concatenating and saving...")
 all_embd = t.cat(embeddings, dim=0)          # [N, 2304]
 all_ids = t.cat(matched_ids_list, dim=0)     # [N]
 
-t.save(all_embd, "/workspace/day_embeddings_after.pt")
-t.save(all_ids, "/workspace/day_token_ids_after.pt")
+t.save(all_embd, "/workspace/day_embeddings_simple.pt")
+t.save(all_ids, "/workspace/day_token_ids_simple.pt")
 
 for l in LAYERS:
     all_h = t.cat(layer_activations[l], dim=0)   # [N, 2304]
-    t.save(all_h, f"/workspace/day_layer_{l}_after.pt")
+    t.save(all_h, f"/workspace/day_layer_{l}_simple.pt")
     print(f"  saved layer {l}: shape {all_h.shape}")
 
 # Also save the days_token dict so you can recover labels later
-t.save(days_token, "/workspace/days_token_map_after.pt")
+t.save(days_token, "/workspace/days_token_map_simple.pt")
 
 print("Done.")

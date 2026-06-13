@@ -31,71 +31,67 @@ for path in sorted(glob.glob("/workspace/linear_map_layer_*.pt")):
     linear_map[l].load_state_dict(t.load(path, weights_only=False))
 log(f"Loaded maps for layers: {sorted(linear_map.keys())}")
 
-log("Loading day_embeddings.pt...")
-day_embds = t.load("/workspace/day_embeddings_after.pt", weights_only=False)
-log(f"  day_embds shape: {day_embds.shape}")
+log("Loading 'after' dataset...")
+day_embds_after = t.load("/workspace/day_embeddings_after.pt", weights_only=False)
+day_ids_after = t.load("/workspace/day_token_ids_after.pt", weights_only=False)
+day_h_after = {}
+for l in LAYERS:
+    day_h_after[l] = t.load(f"/workspace/day_layer_{l}_after.pt", weights_only=False)
+    log(f"  after layer {l}: {day_h_after[l].shape}")
 
-log("Loading day_token_ids.pt...")
-day_ids = t.load("/workspace/day_token_ids_after.pt", weights_only=False)
-log(f"  day_ids shape: {day_ids.shape}")
+log("Loading 'simple' dataset...")
+day_embds_simple = t.load("/workspace/day_embeddings_simple.pt", weights_only=False)
+day_ids_simple = t.load("/workspace/day_token_ids_simple.pt", weights_only=False)
+day_h_simple = {}
+for l in LAYERS:
+    day_h_simple[l] = t.load(f"/workspace/day_layer_{l}_simple.pt", weights_only=False)
+    log(f"  simple layer {l}: {day_h_simple[l].shape}")
 
-log("Loading days_token_map.pt...")
+log("Loading days_token_map...")
 days_map = t.load("/workspace/days_token_map_after.pt", weights_only=False)
 log(f"  days_map keys: {list(days_map.keys())}")
 day_ids_list = sorted(days_map.keys())
 
-log("Loading day layer activations...")
-day_h = {}
-for l in LAYERS:
-    day_h[l] = t.load(f"/workspace/day_layer_{l}_after.pt", weights_only=False)
-    log(f"  layer {l}: {day_h[l].shape}")
-
-def returnMatrices(l):
-    H = day_h[l].float()
+def get_matrices(l):
+    H_after = day_h_after[l].float()
+    H_simple = day_h_simple[l].float()
     with t.no_grad():
-        H_hat = linear_map[l](day_embds.float())
-    residual = H - H_hat
-    return H, H_hat, residual
+        H_hat_after = linear_map[l](day_embds_after.float())
+        H_hat_simple = linear_map[l](day_embds_simple.float())
+    E_after = H_after - H_hat_after
+    E_simple = H_simple - H_hat_simple
+    return {
+        "H":     (H_after.detach().cpu().numpy(),     H_simple.detach().cpu().numpy()),
+        "H_hat": (H_hat_after.detach().cpu().numpy(), H_hat_simple.detach().cpu().numpy()),
+        "E":     (E_after.detach().cpu().numpy(),     E_simple.detach().cpu().numpy()),
+    }
 
 log("Running PCA...")
 results = {}
 for l in LAYERS:
     log(f"  Layer {l}...")
-    H, H_hat, residual = returnMatrices(l)
-    log(f"    H: {H.shape}, H_hat: {H_hat.shape}, residual: {residual.shape}")
-    mats = {
-        "H": H.detach().cpu().numpy(),
-        "H_hat": H_hat.detach().cpu().numpy(),
-        "E": residual.detach().cpu().numpy(),
-    }
-
+    mats = get_matrices(l)
     results[l] = {}
-    for piece, mat in mats.items():
-        log(f"    PCA on {piece}...")
-        pca = PCA(n_components=3).fit(mat)
-        means = np.zeros((len(day_ids_list), mat.shape[1]))
+    for piece, (mat_after, mat_simple) in mats.items():
+        combined = np.vstack([mat_after, mat_simple])
+        pca = PCA(n_components=3).fit(combined)
 
+        means_after  = np.zeros((len(day_ids_list), mat_after.shape[1]))
+        means_simple = np.zeros((len(day_ids_list), mat_simple.shape[1]))
         for i, tid in enumerate(day_ids_list):
-            mask = (day_ids == tid).numpy()
-            means[i] = mat[mask].mean(axis=0)
+            means_after[i]  = mat_after [(day_ids_after  == tid).numpy()].mean(axis=0)
+            means_simple[i] = mat_simple[(day_ids_simple == tid).numpy()].mean(axis=0)
 
         results[l][piece] = {
-            "proj": pca.transform(mat),
-            "means_proj": pca.transform(means),
+            "means_after_proj":  pca.transform(means_after),
+            "means_simple_proj": pca.transform(means_simple),
             "var": pca.explained_variance_ratio_,
         }
 log("PCA done.")
 
-# ── Per-point colors (one per day) ────────────────────────────────────────
-log("Building plot colors...")
+cmap = plt.get_cmap("tab10")
 PIECES = ["H", "H_hat", "E"]
 PIECE_LABELS = {"H": r"Full $h^l$", "H_hat": r"Predicted $\hat{h}^l$", "E": r"Residual $e^l$"}
-
-# day_ids_list = sorted(days_map.keys())                  # 7 token IDs
-id_to_idx = {tid: i for i, tid in enumerate(day_ids_list)}
-cmap = plt.get_cmap("tab10")
-point_colors = np.array([cmap(id_to_idx[tid.item()]) for tid in day_ids])
-log(f"  point_colors shape: {point_colors.shape}")
 
 def make_plot(pc_x, pc_y, filename):
     log(f"Plotting PC{pc_x+1}/PC{pc_y+1}...")
@@ -105,24 +101,25 @@ def make_plot(pc_x, pc_y, filename):
     for col, l in enumerate(LAYERS):
         for row, piece in enumerate(PIECES):
             ax = axes[row, col]
-            proj = results[l][piece]["proj"]
-            var = results[l][piece]["var"]
-            mp = results[l][piece]["means_proj"]
+            var          = results[l][piece]["var"]
+            mp_after     = results[l][piece]["means_after_proj"]
+            mp_simple    = results[l][piece]["means_simple_proj"]
+            mean_colors  = [cmap(i) for i in range(len(day_ids_list))]
 
-            # Scatter of all points
-            # ax.scatter(proj[:, pc_x], proj[:, pc_y], c=point_colors,
-            #            s=10, alpha=0.7, edgecolors="none")
-            # Overlay of per-day means
-            mean_colors = [cmap(i) for i in range(len(day_ids_list))]
-            ax.scatter(mp[:, pc_x], mp[:, pc_y], c=mean_colors, s=200,
-                       edgecolors="black", linewidths=1.5, marker="*", zorder=10)
+            # Simple templates as circles (anchors)
+            ax.scatter(mp_simple[:, pc_x], mp_simple[:, pc_y], c=mean_colors,
+                       s=120, edgecolors="black", linewidths=1.0,
+                       marker="o", zorder=9, alpha=0.85)
+            # Day-after templates as stars
+            ax.scatter(mp_after[:, pc_x], mp_after[:, pc_y], c=mean_colors,
+                       s=200, edgecolors="black", linewidths=1.5,
+                       marker="*", zorder=10)
+
             ax.set_aspect("equal", adjustable="datalim")
-
             if row == 0:
                 ax.set_title(f"Layer {l}", fontsize=11)
             if col == 0:
                 ax.set_ylabel(PIECE_LABELS[piece], fontsize=11)
-
             ax.text(
                 0.02, 0.98,
                 f"PC{pc_x+1}: {var[pc_x]*100:.1f}%\nPC{pc_y+1}: {var[pc_y]*100:.1f}%",
@@ -133,18 +130,23 @@ def make_plot(pc_x, pc_y, filename):
             ax.set_xticks([])
             ax.set_yticks([])
 
-    legend_handles = [
+    day_handles = [
         Line2D([0], [0], marker="o", color="w",
                markerfacecolor=cmap(i), markersize=8,
                label=days_map[tid].strip())
         for i, tid in enumerate(day_ids_list)
     ]
+    type_handles = [
+        Line2D([0], [0], marker="o", color="gray", markersize=8,
+               linestyle="None", label="Simple (anchor)"),
+        Line2D([0], [0], marker="*", color="gray", markersize=10,
+               linestyle="None", label="Day-after"),
+    ]
     fig.legend(
-        handles=legend_handles, loc="lower center", ncol=7,
+        handles=day_handles + type_handles, loc="lower center", ncol=9,
         fontsize=10, frameon=False, bbox_to_anchor=(0.5, -0.02),
     )
-
-    fig.suptitle("PCA of day-of-week mean representations across layers",
+    fig.suptitle("PCA of day-of-week representations: simple (○) vs day-after (★)",
                  fontsize=13, y=1.00)
     plt.tight_layout()
     plt.savefig(filename, dpi=150, bbox_inches="tight")
@@ -152,5 +154,5 @@ def make_plot(pc_x, pc_y, filename):
     log(f"Saved to {filename}")
 
 
-make_plot(0, 1, "/workspace/pca_plots/pca_days_pc12_after.png")
-make_plot(1, 2, "/workspace/pca_plots/pca_days_pc23_after.png")
+make_plot(0, 1, "/workspace/pca_plots/pca_days_pc12_combined.png")
+make_plot(1, 2, "/workspace/pca_plots/pca_days_pc23_combined.png")
