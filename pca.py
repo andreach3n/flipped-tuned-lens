@@ -114,6 +114,14 @@ def make_plot(pc_x, pc_y, filename):
             ax.scatter(mp_after[:, pc_x], mp_after[:, pc_y], c=mean_colors,
                        s=200, edgecolors="black", linewidths=1.5,
                        marker="*", zorder=10)
+            # Arrows from simple (circle) to day-after (star)
+            for i in range(len(day_ids_list)):
+                ax.annotate("",
+                    xy=(mp_after[i, pc_x], mp_after[i, pc_y]),
+                    xytext=(mp_simple[i, pc_x], mp_simple[i, pc_y]),
+                    arrowprops=dict(arrowstyle="->", color=mean_colors[i],
+                                   lw=1.5, mutation_scale=10),
+                    zorder=8)
 
             ax.set_aspect("equal", adjustable="datalim")
             if row == 0:
