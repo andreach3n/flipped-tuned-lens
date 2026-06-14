@@ -22,16 +22,16 @@ def log(msg):
     print(msg, flush=True)
 
 log("Loading days_token_map...")
-days_map = t.load("/workspace/days_token_map_after.pt", weights_only=False)
+days_map = t.load("/workspace/days_token_map_simple.pt", weights_only=False)
 log(f"  days_map keys: {list(days_map.keys())}")
 day_ids_list = sorted(days_map.keys())
 
 log("Loading 'after' dataset...")
-day_embds_after = t.load("/workspace/day_embeddings_after.pt", weights_only=False)
-day_ids_after = t.load("/workspace/day_token_ids_after.pt", weights_only=False)
+day_embds_after = t.load("/workspace/day_embeddings_simple.pt", weights_only=False)
+day_ids_after = t.load("/workspace/day_token_ids_simple.pt", weights_only=False)
 day_h_after = {}
 for l in LAYERS:
-    day_h_after[l] = t.load(f"/workspace/day_layer_{l}_after.pt", weights_only=False)
+    day_h_after[l] = t.load(f"/workspace/day_layer_{l}_simple.pt", weights_only=False)
     log(f"  after layer {l}: {day_h_after[l].shape}")
 
 log("Loading linear maps...")
@@ -99,5 +99,5 @@ ax.set_title("Circularity of day-of-week representations across layers")
 ax.set_xticks(x)
 ax.legend()
 plt.tight_layout()
-plt.savefig("/workspace/circular_probe_loss_after.png", dpi=150)
+plt.savefig("/workspace/circular_probe_loss_simple.png", dpi=150)
 log("Saved circular_probe_loss.png")
