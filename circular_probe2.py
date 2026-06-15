@@ -11,7 +11,9 @@ from transformer_lens.hook_points import HookPoint
 from datasets import load_dataset
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split
 import numpy as np
+
 
 MODEL_NAME = "google/gemma-2-2b"
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
@@ -42,6 +44,16 @@ for path in sorted(glob.glob("/workspace/linear_map_layer_*.pt")):
     linear_map[l].load_state_dict(t.load(path, weights_only=False))
 log(f"Loaded maps for layers: {sorted(linear_map.keys())}")
 
+day_order = [" Monday", " Tuesday", " Wednesday", " Thursday", " Friday", " Saturday", " Sunday"]
+labels = np.array([(day_order.index(days_map[tid.item()])) for tid in day_ids])
+targets = np.array([[np.cos(i * 2 * np.pi / 7), np.sin(i * 2 * np.pi / 7)] for i in labels])
+
+indices = np.arange(len(labels))
+train_idx, test_idx = train_test_split(indices, test_size=0.2)
+
+labels_train, labels_test = labels[train_idx], labels[test_idx]
+targets_train, targets_test = targets[train_idx], targets[test_idx]
+
 H = {}
 H_hat = {}
 E = {}
@@ -51,21 +63,22 @@ for l in LAYERS:
         H_hat[l] = linear_map[l](day_embds.float())
     E[l] = H[l] - H_hat[l]
 
-day_order = [" Monday", " Tuesday", " Wednesday", " Thursday", " Friday", " Saturday", " Sunday"]
-labels = [(day_order.index(days_map[tid.item()])) for tid in day_ids]
-targets = np.array([[np.cos(i * 2 * np.pi / 7), np.sin(i * 2 * np.pi / 7)] for i in labels])
-
-residuals_H = {}
-residuals_H_hat = {}
-residuals_E = {}
+mse_H = {}
+mse_H_hat = {}
+mse_E = {}
 for l in LAYERS:
-    _, residuals_H[l], _, _ = np.linalg.lstsq(H[l].float().numpy(), targets, rcond=None)
-    _, residuals_H_hat[l], _, _ = np.linalg.lstsq(H_hat[l].detach().float().numpy(), targets, rcond=None)
-    _, residuals_E[l], _, _ = np.linalg.lstsq(E[l].detach().float().numpy(), targets, rcond=None)
+    P_H, _, _, _ = np.linalg.lstsq(H[l][train_idx].float().numpy(), targets_train, rcond=None)
+    preds_H = H[l][test_idx].float().numpy() @ P_H
+    mse_H[l] = np.mean((preds_H-targets_test) ** 2)
 
-mse_H = {l: residuals_H[l].sum() / len(labels) for l in LAYERS}
-mse_H_hat = {l: residuals_H_hat[l].sum() / len(labels) for l in LAYERS}
-mse_E = {l: residuals_E[l].sum() / len(labels) for l in LAYERS}
+    P_H_hat, _, _, _ = np.linalg.lstsq(H_hat[l][train_idx].detach().float().numpy(), targets_train, rcond=None)
+    preds_H_hat = H_hat[l][test_idx].detach().float().numpy() @ P_H_hat
+    mse_H_hat[l] = np.mean((preds_H_hat - targets_test) ** 2)
+
+    P_E, _, _, _ = np.linalg.lstsq(E[l][train_idx].detach().float().numpy(), targets_train, rcond=None)
+    preds_E = E[l][test_idx].detach().float().numpy() @ P_E
+    mse_E[l] = np.mean((preds_E - targets_test) ** 2)
+
 
 x = LAYERS
 y_H     = [mse_H[l]     for l in LAYERS]
