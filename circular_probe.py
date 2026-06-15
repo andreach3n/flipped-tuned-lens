@@ -22,16 +22,16 @@ def log(msg):
     print(msg, flush=True)
 
 log("Loading days_token_map...")
-days_map = t.load("/workspace/days_token_map_simple.pt", weights_only=False)
+days_map = t.load("/workspace/days_token_map_after.pt", weights_only=False)
 log(f"  days_map keys: {list(days_map.keys())}")
 day_ids_list = sorted(days_map.keys())
 
 log("Loading 'after' dataset...")
-day_embds_after = t.load("/workspace/day_embeddings_simple.pt", weights_only=False)
-day_ids_after = t.load("/workspace/day_token_ids_simple.pt", weights_only=False)
+day_embds_after = t.load("/workspace/day_embeddings_after.pt", weights_only=False)
+day_ids_after = t.load("/workspace/day_token_ids_after.pt", weights_only=False)
 day_h_after = {}
 for l in LAYERS:
-    day_h_after[l] = t.load(f"/workspace/day_layer_{l}_simple.pt", weights_only=False)
+    day_h_after[l] = t.load(f"/workspace/day_layer_{l}_after.pt", weights_only=False)
     log(f"  after layer {l}: {day_h_after[l].shape}")
 
 log("Loading linear maps...")
@@ -64,7 +64,7 @@ for l in LAYERS:
 
 # label each sample 0-6
 day_order = [" Monday", " Tuesday", " Wednesday", " Thursday", " Friday", " Saturday", " Sunday"]
-labels = [day_order.index(days_map[tid.item()]) for tid in day_ids_after]
+labels = [(day_order.index(days_map[tid.item()]) + 1) % 7 for tid in day_ids_after] # switched to probing for the next day
 
 pca_embds = PCA(n_components=5).fit(day_embds_after.float().numpy())
 Z_embds = pca_embds.transform(day_embds_after.float().numpy())
@@ -99,5 +99,5 @@ ax.set_title("Circularity of day-of-week representations across layers")
 ax.set_xticks(x)
 ax.legend()
 plt.tight_layout()
-plt.savefig("/workspace/circular_probe_loss_simple.png", dpi=150)
+plt.savefig("/workspace/circular_probe_loss_after_nextdayprobe.png", dpi=150)
 log("Saved circular_probe_loss.png")
