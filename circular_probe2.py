@@ -19,6 +19,7 @@ MODEL_NAME = "google/gemma-2-2b"
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
 STOP_LAYER = max(LAYERS) + 1
 D_MODEL = 2304
+N_EPOCHS = 100
 
 def log(msg):
     print(msg, flush=True)
@@ -49,10 +50,15 @@ labels = np.array([(day_order.index(days_map[tid.item()])) for tid in day_ids])
 targets = np.array([[np.cos(i * 2 * np.pi / 7), np.sin(i * 2 * np.pi / 7)] for i in labels])
 
 indices = np.arange(len(labels))
-train_idx, test_idx = train_test_split(indices, test_size=0.2)
+train_val_idx, test_idx = train_test_split(indices, test_size=0.15)
+train_idx, val_idx = train_test_split(train_val_idx, test_size=0.15/0.85)
 
-labels_train, labels_test = labels[train_idx], labels[test_idx]
-targets_train, targets_test = targets[train_idx], targets[test_idx]
+labels_train, labels_val, labels_test = labels[train_idx], labels[val_idx], labels[test_idx]
+targets_train, targets_val, targets_test = targets[train_idx], targets[val_idx], targets[test_idx]
+
+targets_train_t = t.tensor(targets_train, dtype=t.float32)
+targets_val_t   = t.tensor(targets_val,   dtype=t.float32)
+targets_test_t  = t.tensor(targets_test,  dtype=t.float32)
 
 H = {}
 H_hat = {}
@@ -61,24 +67,36 @@ for l in LAYERS:
     H[l] = day_h[l]
     with t.no_grad():
         H_hat[l] = linear_map[l](day_embds.float())
-    E[l] = H[l] - H_hat[l]
+    E[l] = H[l].float() - H_hat[l]
 
 mse_H = {}
 mse_H_hat = {}
 mse_E = {}
+
+def train_probe(acts_train, acts_val, acts_test, label):
+    probe = nn.Linear(D_MODEL, 2, bias=False)
+    optimizer = t.optim.Adam(probe.parameters())
+    acts_train_t = t.tensor(acts_train, dtype=t.float32)
+    acts_val_t   = t.tensor(acts_val,   dtype=t.float32)
+    acts_test_t  = t.tensor(acts_test,  dtype=t.float32)
+    for epoch in range(N_EPOCHS):
+        optimizer.zero_grad()
+        loss = t.nn.functional.mse_loss(probe(acts_train_t), targets_train_t)
+        loss.backward()
+        optimizer.step()
+        if epoch % 10 == 0:
+            with t.no_grad():
+                val_loss = t.nn.functional.mse_loss(probe(acts_val_t), targets_val_t)
+            log(f"  {label} epoch {epoch}: val loss {val_loss.item():.4f}")
+    with t.no_grad():
+        test_mse = t.nn.functional.mse_loss(probe(acts_test_t), targets_test_t).item()
+    return test_mse
+
 for l in LAYERS:
-    P_H, _, _, _ = np.linalg.lstsq(H[l][train_idx].float().numpy(), targets_train, rcond=None)
-    preds_H = H[l][test_idx].float().numpy() @ P_H
-    mse_H[l] = np.mean((preds_H-targets_test) ** 2)
-
-    P_H_hat, _, _, _ = np.linalg.lstsq(H_hat[l][train_idx].detach().float().numpy(), targets_train, rcond=None)
-    preds_H_hat = H_hat[l][test_idx].detach().float().numpy() @ P_H_hat
-    mse_H_hat[l] = np.mean((preds_H_hat - targets_test) ** 2)
-
-    P_E, _, _, _ = np.linalg.lstsq(E[l][train_idx].detach().float().numpy(), targets_train, rcond=None)
-    preds_E = E[l][test_idx].detach().float().numpy() @ P_E
-    mse_E[l] = np.mean((preds_E - targets_test) ** 2)
-
+    log(f"Layer {l}...")
+    mse_H[l] = train_probe(H[l][train_idx].float().numpy(), H[l][val_idx].float().numpy(), H[l][test_idx].float().numpy(), f"H layer {l}")
+    mse_H_hat[l] = train_probe(H_hat[l][train_idx].detach().float().numpy(), H_hat[l][val_idx].detach().float().numpy(), H_hat[l][test_idx].detach().float().numpy(), f"H_hat layer {l}")
+    mse_E[l] = train_probe(E[l][train_idx].detach().float().numpy(), E[l][val_idx].detach().float().numpy(), E[l][test_idx].detach().float().numpy(), f"E layer {l}")
 
 x = LAYERS
 y_H     = [mse_H[l]     for l in LAYERS]
@@ -95,5 +113,5 @@ ax.set_title("Circularity of day-of-week representations (OWT)")
 ax.set_xticks(x)
 ax.legend()
 plt.tight_layout()
-plt.savefig("/workspace/circular_probe2_loss_OWT_lstsq.png", dpi=150)
+plt.savefig("/workspace/circular_probe2_loss_OWT_gd.png", dpi=150)
 log("Saved circular_probe2_loss.png")
