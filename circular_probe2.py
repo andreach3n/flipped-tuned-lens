@@ -19,7 +19,7 @@ MODEL_NAME = "google/gemma-2-2b"
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
 STOP_LAYER = max(LAYERS) + 1
 D_MODEL = 2304
-N_EPOCHS = 1000
+N_EPOCHS = 20000
 
 def log(msg):
     print(msg, flush=True)
@@ -73,21 +73,40 @@ mse_H = {}
 mse_H_hat = {}
 mse_E = {}
 
+PATIENCE = 50
+
 def train_probe(acts_train, acts_val, acts_test, label):
     probe = nn.Linear(D_MODEL, 2, bias=False)
     optimizer = t.optim.Adam(probe.parameters())
     acts_train_t = t.tensor(acts_train, dtype=t.float32)
     acts_val_t   = t.tensor(acts_val,   dtype=t.float32)
     acts_test_t  = t.tensor(acts_test,  dtype=t.float32)
+
+    best_val_loss = float("inf")
+    epochs_without_improvement = 0
+
     for epoch in range(N_EPOCHS):
         optimizer.zero_grad()
         loss = t.nn.functional.mse_loss(probe(acts_train_t), targets_train_t)
         loss.backward()
         optimizer.step()
+
+        with t.no_grad():
+            val_loss = t.nn.functional.mse_loss(probe(acts_val_t), targets_val_t).item()
+
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
         if epoch % 10 == 0:
-            with t.no_grad():
-                val_loss = t.nn.functional.mse_loss(probe(acts_val_t), targets_val_t)
-            log(f"  {label} epoch {epoch}: val loss {val_loss.item():.4f}")
+            log(f"  {label} epoch {epoch}: val loss {val_loss:.4f}")
+
+        if epochs_without_improvement >= PATIENCE:
+            log(f"  {label} early stopping at epoch {epoch}")
+            break
+
     with t.no_grad():
         test_mse = t.nn.functional.mse_loss(probe(acts_test_t), targets_test_t).item()
     return test_mse
