@@ -73,6 +73,10 @@ mse_H = {}
 mse_H_hat = {}
 mse_E = {}
 
+W_H = {}
+W_H_hat = {}
+W_E = {}
+
 PATIENCE = 50
 
 def train_probe(acts_train, acts_val, acts_test, label):
@@ -116,13 +120,14 @@ def train_probe(acts_train, acts_val, acts_test, label):
 
     with t.no_grad():
         test_mse = t.nn.functional.mse_loss(probe(acts_test_t), targets_test_t).item()
-    return test_mse
+    return test_mse, probe.weight
 
+# training loop
 for l in LAYERS:
     log(f"Layer {l}...")
-    mse_H[l] = train_probe(H[l][train_idx].float().numpy(), H[l][val_idx].float().numpy(), H[l][test_idx].float().numpy(), f"H layer {l}")
-    mse_H_hat[l] = train_probe(H_hat[l][train_idx].detach().float().numpy(), H_hat[l][val_idx].detach().float().numpy(), H_hat[l][test_idx].detach().float().numpy(), f"H_hat layer {l}")
-    mse_E[l] = train_probe(E[l][train_idx].detach().float().numpy(), E[l][val_idx].detach().float().numpy(), E[l][test_idx].detach().float().numpy(), f"E layer {l}")
+    mse_H[l], W_H[l] = train_probe(H[l][train_idx].float().numpy(), H[l][val_idx].float().numpy(), H[l][test_idx].float().numpy(), f"H layer {l}")
+    mse_H_hat[l], W_H_hat[l] = train_probe(H_hat[l][train_idx].detach().float().numpy(), H_hat[l][val_idx].detach().float().numpy(), H_hat[l][test_idx].detach().float().numpy(), f"H_hat layer {l}")
+    mse_E[l], W_E[l] = train_probe(E[l][train_idx].detach().float().numpy(), E[l][val_idx].detach().float().numpy(), E[l][test_idx].detach().float().numpy(), f"E layer {l}")
 
 x = LAYERS
 y_H     = [mse_H[l]     for l in LAYERS]
@@ -141,3 +146,46 @@ ax.legend()
 plt.tight_layout()
 plt.savefig("/workspace/circular_probe2_loss_OWT_gd_2.png", dpi=150)
 log("Saved circular_probe2_loss.png")
+
+# projection and plotting
+cmap = plt.get_cmap("tab10")
+day_colors = [cmap(i) for i in range(7)]
+point_colors = [day_colors[i] for i in labels]
+
+PIECES = ["H", "H_hat", "E"]
+PIECE_LABELS = {"H": r"$H$", "H_hat": r"$\hat{H}$", "E": r"$E$"}
+PIECE_WEIGHTS = {"H": W_H, "H_hat": W_H_hat, "E": W_E}
+PIECE_ACTS    = {"H": H,   "H_hat": H_hat,   "E": E}
+
+n_rows, n_cols = len(PIECES), len(LAYERS)
+fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows))
+
+for row, piece in enumerate(PIECES):
+    for col, l in enumerate(LAYERS):
+        ax = axes[row, col]
+        acts = PIECE_ACTS[piece][l].float()
+        if piece != "H":
+            acts = acts.detach()
+        W = PIECE_WEIGHTS[piece][l].detach()
+        proj = (acts @ W.T).detach().numpy()
+
+        ax.scatter(proj[:, 0], proj[:, 1], c=point_colors, alpha=0.3, s=5)
+        ax.set_aspect("equal", adjustable="datalim")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if row == 0:
+            ax.set_title(f"Layer {l}", fontsize=11)
+        if col == 0:
+            ax.set_ylabel(PIECE_LABELS[piece], fontsize=11)
+
+handles = [plt.Line2D([0], [0], marker="o", color="w", markerfacecolor=day_colors[i],
+                      markersize=8, label=day_order[i].strip()) for i in range(7)]
+fig.legend(handles=handles, loc="lower center", ncol=7, fontsize=10,
+           frameon=False, bbox_to_anchor=(0.5, -0.02))
+fig.suptitle("Probe subspace projection of day-of-week representations", fontsize=13, y=1.01)
+
+plt.tight_layout()
+plt.savefig("/workspace/probe_subspace_all.png", dpi=150, bbox_inches="tight")
+plt.close()
+log("Saved probe_subspace_all.png")
+
