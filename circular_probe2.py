@@ -78,6 +78,13 @@ PATIENCE = 50
 def train_probe(acts_train, acts_val, acts_test, label):
     probe = nn.Linear(D_MODEL, 2, bias=False)
     optimizer = t.optim.Adam(probe.parameters())
+
+    mean = acts_train.mean(axis=0)
+    std  = acts_train.std(axis=0) + 1e-8
+    acts_train = (acts_train - mean) / std
+    acts_val   = (acts_val   - mean) / std
+    acts_test  = (acts_test  - mean) / std
+
     acts_train_t = t.tensor(acts_train, dtype=t.float32)
     acts_val_t   = t.tensor(acts_val,   dtype=t.float32)
     acts_test_t  = t.tensor(acts_test,  dtype=t.float32)
