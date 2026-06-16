@@ -19,7 +19,7 @@ MODEL_NAME = "google/gemma-2-2b"
 LAYERS = [1, 5, 9, 13, 17, 21, 25]
 STOP_LAYER = max(LAYERS) + 1
 D_MODEL = 2304
-N_EPOCHS = 100
+N_EPOCHS = 1000
 
 def log(msg):
     print(msg, flush=True)
