@@ -1,0 +1,111 @@
+import torch as t
+import torch.nn as nn
+from transformer_lens import (
+    HookedTransformer,
+)
+import glob
+from transformer_lens.hook_points import HookPoint
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+import numpy as np
+import pandas as pd
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+from sklearn.preprocessing import StandardScaler
+
+
+MODEL_NAME = "google/gemma-2-2b"
+LAYERS = [1, 5, 9, 17, 21, 25]
+STOP_LAYER = max(LAYERS) + 1
+D_MODEL = 2304
+
+df = pd.read_csv("/Users/andrea/Documents/flipped tuned lens/truth_datasets/cities.csv")
+statements = df["statement"].tolist()
+labels = np.array(df["label"].tolist())
+
+device = t.device("cuda" if t.cuda.is_available() else "cpu")
+
+model = HookedTransformer.from_pretrained_no_processing(MODEL_NAME, dtype=t.bfloat16).to(device)
+model.eval()
+
+linear_map = {}
+for path in sorted(glob.glob("/workspace/linear_map_layer_*.pt")):
+    l = int(path.split("layer_")[1][:-3])
+    linear_map[l] = nn.Linear(D_MODEL, D_MODEL)
+    linear_map[l].load_state_dict(t.load(path, weights_only=False))
+
+embeddings = []
+layer_activations = {l: [] for l in LAYERS}
+names_filter = ["hook_embed"] + [f"blocks.{l}.hook_resid_post" for l in layer_activations]
+
+for data in statements:
+    tokens = model.to_tokens(data).to(device)
+    tokens = tokens[:, :512]
+
+    with t.no_grad():
+        logits, cache = model.run_with_cache(tokens, names_filter=names_filter, stop_at_layer=STOP_LAYER)
+
+    embeddings.append(cache["hook_embed"].squeeze(0)[-1].cpu())
+    for l in layer_activations:
+        layer_activations[l].append(cache[f"blocks.{l}.hook_resid_post"].squeeze(0)[-1].cpu()) #last token position
+    del cache, logits
+
+embeddings = t.stack(embeddings)
+np_layer_activations = {l: None for l in LAYERS}
+for l in LAYERS:
+    np_layer_activations[l] = t.stack(layer_activations[l]).float().numpy()
+
+accuracy_full = {}
+accuracy_emb = {}
+accuracy_res = {}
+
+for l in LAYERS:
+    idx = np.arange(len(np_layer_activations[l]))
+    train_idx, test_idx = train_test_split(idx, test_size=0.2)
+
+    train_activations, test_activations = np_layer_activations[l][train_idx], np_layer_activations[l][test_idx]
+    train_labels, test_labels = labels[train_idx], labels[test_idx]
+
+    scaler = StandardScaler()
+    train_activations = scaler.fit_transform(train_activations)
+    test_activations = scaler.transform(test_activations)
+
+    probe = LogisticRegression(max_iter=1000)
+    probe.fit(train_activations, train_labels)
+
+    predictions = probe.predict(test_activations)
+    probabilities = probe.predict_proba(test_activations)
+    accuracy_full[l] = accuracy_score(test_labels, predictions)
+
+    # decomposition
+    h = t.stack(layer_activations[l]).float()
+    with t.no_grad():
+        linear_map[l].eval()
+        h_emb = linear_map[l](embeddings.float())
+    h_res = h - h_emb
+
+    h_emb_test, h_res_test = h_emb[test_idx], h_res[test_idx]
+    h_emb_test, h_res_test = scaler.transform(h_emb_test.detach().numpy()), scaler.transform(h_res_test.detach().numpy())
+
+    evaluated_emb = probe.coef_ @ h_emb_test.T + probe.intercept_
+    predicted_emb = (evaluated_emb > 0).astype(int).flatten()
+    accuracy_emb[l] = accuracy_score(test_labels, predicted_emb)
+
+    evaluated_res = probe.coef_ @ h_res_test.T + probe.intercept_
+    predicted_res = (evaluated_res > 0).astype(int).flatten()
+    accuracy_res[l] = accuracy_score(test_labels, predicted_res)
+
+    print(f"Layer {l} — full: {accuracy_score(test_labels, predictions):.4f}, emb: {accuracy_emb[l]:.4f}, res: {accuracy_res[l]:.4f}")
+
+plt.figure(figsize=(8, 5))
+plt.plot(LAYERS, [accuracy_full[l] for l in LAYERS], marker='o', label='full')
+plt.plot(LAYERS, [accuracy_emb[l] for l in LAYERS], marker='o', label='embedding')
+plt.plot(LAYERS, [accuracy_res[l] for l in LAYERS], marker='o', label='residual')
+plt.xlabel("Layer")
+plt.ylabel("Accuracy")
+plt.title("Probe Accuracy by Component")
+plt.legend()
+plt.xticks(LAYERS)
+plt.ylim(0, 1)
+plt.tight_layout()
+plt.savefig("/workspace/probe_accuracy_by_layer.png", dpi=150)
