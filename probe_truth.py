@@ -19,7 +19,8 @@ LAYERS = [1, 5, 9, 17, 21, 25]
 STOP_LAYER = max(LAYERS) + 1
 D_MODEL = 2304
 
-df = pd.read_csv("/Users/andrea/Documents/flipped tuned lens/truth_datasets/cities.csv")
+# df = pd.read_csv("/Users/andrea/Documents/flipped tuned lens/truth_datasets/cities.csv")
+df = pd.read_csv("/workspace/cities.csv")
 statements = df["statement"].tolist()
 labels = np.array(df["label"].tolist())
 
