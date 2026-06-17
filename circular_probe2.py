@@ -192,7 +192,7 @@ fig.legend(handles=handles, loc="lower center", ncol=7, fontsize=10,
 fig.suptitle("Probe subspace projection of day-of-week representations", fontsize=13, y=1.01)
 
 plt.tight_layout()
-plt.savefig("/workspace/probe_subspace_all.png", dpi=150, bbox_inches="tight")
+plt.savefig("/workspace/probe_subspace_all_normalized.png", dpi=150, bbox_inches="tight")
 plt.close()
 log("Saved probe_subspace_all.png")
 
