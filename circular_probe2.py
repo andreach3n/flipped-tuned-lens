@@ -76,6 +76,12 @@ mse_E = {}
 W_H = {}
 W_H_hat = {}
 W_E = {}
+mean_H = {}
+mean_H_hat = {}
+mean_E = {}
+std_H = {}
+std_H_hat = {}
+std_E = {}
 
 PATIENCE = 50
 
@@ -120,14 +126,14 @@ def train_probe(acts_train, acts_val, acts_test, label):
 
     with t.no_grad():
         test_mse = t.nn.functional.mse_loss(probe(acts_test_t), targets_test_t).item()
-    return test_mse, probe.weight
+    return test_mse, probe.weight, mean, std
 
 # training loop
 for l in LAYERS:
     log(f"Layer {l}...")
-    mse_H[l], W_H[l] = train_probe(H[l][train_idx].float().numpy(), H[l][val_idx].float().numpy(), H[l][test_idx].float().numpy(), f"H layer {l}")
-    mse_H_hat[l], W_H_hat[l] = train_probe(H_hat[l][train_idx].detach().float().numpy(), H_hat[l][val_idx].detach().float().numpy(), H_hat[l][test_idx].detach().float().numpy(), f"H_hat layer {l}")
-    mse_E[l], W_E[l] = train_probe(E[l][train_idx].detach().float().numpy(), E[l][val_idx].detach().float().numpy(), E[l][test_idx].detach().float().numpy(), f"E layer {l}")
+    mse_H[l], W_H[l], mean_H[l], std_H[l] = train_probe(H[l][train_idx].float().numpy(), H[l][val_idx].float().numpy(), H[l][test_idx].float().numpy(), f"H layer {l}")
+    mse_H_hat[l], W_H_hat[l], mean_H_hat[l], std_H_hat[l] = train_probe(H_hat[l][train_idx].detach().float().numpy(), H_hat[l][val_idx].detach().float().numpy(), H_hat[l][test_idx].detach().float().numpy(), f"H_hat layer {l}")
+    mse_E[l], W_E[l], mean_E[l], std_E[l] = train_probe(E[l][train_idx].detach().float().numpy(), E[l][val_idx].detach().float().numpy(), E[l][test_idx].detach().float().numpy(), f"E layer {l}")
 
 x = LAYERS
 y_H     = [mse_H[l]     for l in LAYERS]
@@ -154,8 +160,10 @@ point_colors = [day_colors[i] for i in labels]
 
 PIECES = ["H", "H_hat", "E"]
 PIECE_LABELS = {"H": r"$H$", "H_hat": r"$\hat{H}$", "E": r"$E$"}
-PIECE_WEIGHTS = {"H": W_H, "H_hat": W_H_hat, "E": W_E}
-PIECE_ACTS    = {"H": H,   "H_hat": H_hat,   "E": E}
+PIECE_WEIGHTS = {"H": W_H,    "H_hat": W_H_hat,    "E": W_E}
+PIECE_ACTS    = {"H": H,      "H_hat": H_hat,      "E": E}
+PIECE_MEANS   = {"H": mean_H, "H_hat": mean_H_hat, "E": mean_E}
+PIECE_STDS    = {"H": std_H,  "H_hat": std_H_hat,  "E": std_E}
 
 n_rows, n_cols = len(PIECES), len(LAYERS)
 fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows))
@@ -163,11 +171,10 @@ fig, axes = plt.subplots(n_rows, n_cols, figsize=(3 * n_cols, 3 * n_rows))
 for row, piece in enumerate(PIECES):
     for col, l in enumerate(LAYERS):
         ax = axes[row, col]
-        acts = PIECE_ACTS[piece][l].float()
-        if piece != "H":
-            acts = acts.detach()
-        W = PIECE_WEIGHTS[piece][l].detach()
-        proj = (acts @ W.T).detach().numpy()
+        acts = PIECE_ACTS[piece][l].float().detach().numpy()
+        acts_norm = (acts - PIECE_MEANS[piece][l]) / PIECE_STDS[piece][l]
+        W = PIECE_WEIGHTS[piece][l].detach().numpy()
+        proj = acts_norm @ W.T
 
         ax.scatter(proj[:, 0], proj[:, 1], c=point_colors, alpha=0.3, s=5)
         ax.set_aspect("equal", adjustable="datalim")
