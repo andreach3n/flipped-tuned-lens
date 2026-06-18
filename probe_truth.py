@@ -61,42 +61,48 @@ accuracy_emb = {}
 accuracy_res = {}
 
 for l in LAYERS:
+    with t.no_grad():
+        linear_map[l].eval()
+        h_emb = linear_map[l](embeddings.float()).numpy()
+    h_res = np_layer_activations[l] - h_emb
+
     idx = np.arange(len(np_layer_activations[l]))
     train_idx, test_idx = train_test_split(idx, test_size=0.2)
 
     train_activations, test_activations = np_layer_activations[l][train_idx], np_layer_activations[l][test_idx]
     train_labels, test_labels = labels[train_idx], labels[test_idx]
+    train_h_emb, test_h_emb = h_emb[train_idx], h_emb[test_idx]
+    train_h_res, test_h_res = h_res[train_idx], h_res[test_idx]
 
-    scaler = StandardScaler()
-    train_activations = scaler.fit_transform(train_activations)
-    test_activations = scaler.transform(test_activations)
+    # probe for full
+    scaler_activations = StandardScaler()
+    train_activations = scaler_activations.fit_transform(train_activations)
+    test_activations = scaler_activations.transform(test_activations)
 
-    probe = LogisticRegression(max_iter=1000)
-    probe.fit(train_activations, train_labels)
+    probe_full = LogisticRegression(max_iter=1000)
+    probe_full.fit(train_activations, train_labels)
 
-    predictions = probe.predict(test_activations)
-    probabilities = probe.predict_proba(test_activations)
-    accuracy_full[l] = accuracy_score(test_labels, predictions)
+    pred_activations = probe_full.predict(test_activations)
+    accuracy_full[l] = accuracy_score(test_labels, pred_activations)
 
-    # decomposition
-    h = t.stack(layer_activations[l]).float()
-    with t.no_grad():
-        linear_map[l].eval()
-        h_emb = linear_map[l](embeddings.float())
-    h_res = h - h_emb
+    # probe for embeddings part
+    scaler_emb = StandardScaler()
+    train_h_emb, test_h_emb = scaler_emb.fit_transform(train_h_emb), scaler_emb.transform(test_h_emb)
+    probe_emb = LogisticRegression(max_iter=1000)
+    probe_emb.fit(train_h_emb, train_labels)
 
-    h_emb_test, h_res_test = h_emb[test_idx], h_res[test_idx]
-    h_emb_test, h_res_test = scaler.transform(h_emb_test.detach().numpy()), scaler.transform(h_res_test.detach().numpy())
+    pred_emb = probe_emb.predict(test_h_emb)
+    accuracy_emb[l] = accuracy_score(test_labels, pred_emb)
 
-    evaluated_emb = probe.coef_ @ h_emb_test.T + probe.intercept_
-    predicted_emb = (evaluated_emb > 0).astype(int).flatten()
-    accuracy_emb[l] = accuracy_score(test_labels, predicted_emb)
+    # probe for residuals
+    scaler_res = StandardScaler()
+    train_h_res, test_h_res = scaler_res.fit_transform(train_h_res), scaler_res.transform(test_h_res)
+    probe_res = LogisticRegression(max_iter=1000)
+    probe_res.fit(train_h_res, train_labels)
 
-    evaluated_res = probe.coef_ @ h_res_test.T + probe.intercept_
-    predicted_res = (evaluated_res > 0).astype(int).flatten()
-    accuracy_res[l] = accuracy_score(test_labels, predicted_res)
-
-    print(f"Layer {l} — full: {accuracy_score(test_labels, predictions):.4f}, emb: {accuracy_emb[l]:.4f}, res: {accuracy_res[l]:.4f}")
+    pred_res = probe_res.predict(test_h_res)
+    accuracy_res[l] = accuracy_score(test_labels, pred_res)
+    print(f"Layer {l} — full: {accuracy_full[l]:.4f}, emb: {accuracy_emb[l]:.4f}, res: {accuracy_res[l]:.4f}")
 
 plt.figure(figsize=(8, 5))
 plt.plot(LAYERS, [accuracy_full[l] for l in LAYERS], marker='o', label='full')
