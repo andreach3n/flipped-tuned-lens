@@ -46,9 +46,9 @@ for data in statements:
     with t.no_grad():
         logits, cache = model.run_with_cache(tokens, names_filter=names_filter, stop_at_layer=STOP_LAYER)
 
-    embeddings.append(cache["hook_embed"].squeeze(0)[-1].cpu())
+    embeddings.append(cache["hook_embed"].squeeze(0).mean(dim=0).cpu())
     for l in layer_activations:
-        layer_activations[l].append(cache[f"blocks.{l}.hook_resid_post"].squeeze(0)[-1].cpu()) #last token position
+        layer_activations[l].append(cache[f"blocks.{l}.hook_resid_post"].squeeze(0).mean(dim=0).cpu()) #last token position [-1], now mean across activations
     del cache, logits
 
 embeddings = t.stack(embeddings)
@@ -128,7 +128,7 @@ ax1.legend()
 ax1.set_xticks(LAYERS)
 ax1.set_ylim(0, 1)
 fig1.tight_layout()
-fig1.savefig("/workspace/truth_probe_accuracy_by_layer_cities_1.png", dpi=150)
+fig1.savefig("/workspace/truth_probe_accuracy_by_layer_cities_mean.png", dpi=150)
 
 # contribution scatter plot
 fig2, axes = plt.subplots(2, 4, figsize=(16, 8))
@@ -143,4 +143,4 @@ for ax, l in zip(axes.flatten(), LAYERS):
 axes.flatten()[-1].set_visible(False)
 fig2.suptitle("Embedding vs Residual Contribution to Probe Score")
 fig2.tight_layout()
-fig2.savefig("/workspace/truth_probe_contributions_cities_1.png", dpi=150)
+fig2.savefig("/workspace/truth_probe_contributions_cities_mean.png", dpi=150)
