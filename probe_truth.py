@@ -15,7 +15,7 @@ from sklearn.preprocessing import StandardScaler
 
 
 MODEL_NAME = "google/gemma-2-2b"
-LAYERS = [1, 5, 9, 17, 21, 25]
+LAYERS = [1, 5, 9, 13, 17, 21, 25]
 STOP_LAYER = max(LAYERS) + 1
 D_MODEL = 2304
 
