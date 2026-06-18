@@ -60,6 +60,11 @@ accuracy_full = {}
 accuracy_emb = {}
 accuracy_res = {}
 
+all_emb_contrib = {}
+all_res_contrib = {}
+all_test_labels = {}
+
+
 for l in LAYERS:
     with t.no_grad():
         linear_map[l].eval()
@@ -87,32 +92,54 @@ for l in LAYERS:
 
     # probe for embeddings part
     scaler_emb = StandardScaler()
-    train_h_emb, test_h_emb = scaler_emb.fit_transform(train_h_emb), scaler_emb.transform(test_h_emb)
+    train_h_emb_scaled, test_h_emb_scaled = scaler_emb.fit_transform(train_h_emb), scaler_emb.transform(test_h_emb)
     probe_emb = LogisticRegression(max_iter=1000)
-    probe_emb.fit(train_h_emb, train_labels)
+    probe_emb.fit(train_h_emb_scaled, train_labels)
 
-    pred_emb = probe_emb.predict(test_h_emb)
+    pred_emb = probe_emb.predict(test_h_emb_scaled)
     accuracy_emb[l] = accuracy_score(test_labels, pred_emb)
 
     # probe for residuals
     scaler_res = StandardScaler()
-    train_h_res, test_h_res = scaler_res.fit_transform(train_h_res), scaler_res.transform(test_h_res)
+    train_h_res_scaled, test_h_res_scaled = scaler_res.fit_transform(train_h_res), scaler_res.transform(test_h_res)
     probe_res = LogisticRegression(max_iter=1000)
-    probe_res.fit(train_h_res, train_labels)
+    probe_res.fit(train_h_res_scaled, train_labels)
 
-    pred_res = probe_res.predict(test_h_res)
+    pred_res = probe_res.predict(test_h_res_scaled)
     accuracy_res[l] = accuracy_score(test_labels, pred_res)
     print(f"Layer {l} — full: {accuracy_full[l]:.4f}, emb: {accuracy_emb[l]:.4f}, res: {accuracy_res[l]:.4f}")
 
-plt.figure(figsize=(8, 5))
-plt.plot(LAYERS, [accuracy_full[l] for l in LAYERS], marker='o', label='full')
-plt.plot(LAYERS, [accuracy_emb[l] for l in LAYERS], marker='o', label='embedding')
-plt.plot(LAYERS, [accuracy_res[l] for l in LAYERS], marker='o', label='residual')
-plt.xlabel("Layer")
-plt.ylabel("Accuracy")
-plt.title("Probe Accuracy by Component")
-plt.legend()
-plt.xticks(LAYERS)
-plt.ylim(0, 1)
-plt.tight_layout()
-plt.savefig("/workspace/truth_probe_accuracy_by_layer_cities.png", dpi=150)
+    test_h_emb_scaled_full = scaler_activations.transform(test_h_emb)
+    test_h_res_scaled_full = scaler_activations.transform(test_h_res)
+
+    all_emb_contrib[l] = (probe_full.coef_ @ test_h_emb_scaled_full.T).flatten()
+    all_res_contrib[l] = (probe_full.coef_ @ test_h_res_scaled_full.T).flatten()
+    all_test_labels[l] = test_labels
+
+# accuracy plot
+fig1, ax1 = plt.subplots(figsize=(8, 5))
+ax1.plot(LAYERS, [accuracy_full[l] for l in LAYERS], marker='o', label='full')
+ax1.plot(LAYERS, [accuracy_emb[l] for l in LAYERS], marker='o', label='embedding')
+ax1.plot(LAYERS, [accuracy_res[l] for l in LAYERS], marker='o', label='residual')
+ax1.set_xlabel("Layer")
+ax1.set_ylabel("Accuracy")
+ax1.set_title("Probe Accuracy by Component")
+ax1.legend()
+ax1.set_xticks(LAYERS)
+ax1.set_ylim(0, 1)
+fig1.tight_layout()
+fig1.savefig("/workspace/truth_probe_accuracy_by_layer_cities_1.png", dpi=150)
+
+# contribution scatter plot
+fig2, axes = plt.subplots(2, 3, figsize=(12, 8))
+for ax, l in zip(axes.flatten(), LAYERS):
+    colors = ['red' if label == 0 else 'blue' for label in all_test_labels[l]]
+    ax.scatter(all_emb_contrib[l], all_res_contrib[l], c=colors, alpha=0.5, s=10)
+    ax.set_xlabel("emb contrib")
+    ax.set_ylabel("res contrib")
+    ax.set_title(f"Layer {l}")
+    ax.axhline(0, color='gray', linewidth=0.5)
+    ax.axvline(0, color='gray', linewidth=0.5)
+fig2.suptitle("Embedding vs Residual Contribution to Probe Score")
+fig2.tight_layout()
+fig2.savefig("/workspace/truth_probe_contributions_cities_1.png", dpi=150)
