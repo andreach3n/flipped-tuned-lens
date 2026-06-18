@@ -131,7 +131,7 @@ fig1.tight_layout()
 fig1.savefig("/workspace/truth_probe_accuracy_by_layer_cities_1.png", dpi=150)
 
 # contribution scatter plot
-fig2, axes = plt.subplots(2, 3, figsize=(12, 8))
+fig2, axes = plt.subplots(2, 4, figsize=(16, 8))
 for ax, l in zip(axes.flatten(), LAYERS):
     colors = ['red' if label == 0 else 'blue' for label in all_test_labels[l]]
     ax.scatter(all_emb_contrib[l], all_res_contrib[l], c=colors, alpha=0.5, s=10)
@@ -140,6 +140,7 @@ for ax, l in zip(axes.flatten(), LAYERS):
     ax.set_title(f"Layer {l}")
     ax.axhline(0, color='gray', linewidth=0.5)
     ax.axvline(0, color='gray', linewidth=0.5)
+axes.flatten()[-1].set_visible(False)
 fig2.suptitle("Embedding vs Residual Contribution to Probe Score")
 fig2.tight_layout()
 fig2.savefig("/workspace/truth_probe_contributions_cities_1.png", dpi=150)
