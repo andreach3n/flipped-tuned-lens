@@ -89,6 +89,7 @@ for l in LAYERS:
 
     pred_activations = probe_full.predict(test_activations)
     accuracy_full[l] = accuracy_score(test_labels, pred_activations)
+    train_acc_full = probe_full.score(train_activations, train_labels)
 
     # probe for embeddings part
     scaler_emb = StandardScaler()
@@ -98,6 +99,7 @@ for l in LAYERS:
 
     pred_emb = probe_emb.predict(test_h_emb_scaled)
     accuracy_emb[l] = accuracy_score(test_labels, pred_emb)
+    train_acc_emb = probe_emb.score(train_h_emb_scaled, train_labels)
 
     # probe for residuals
     scaler_res = StandardScaler()
@@ -107,7 +109,8 @@ for l in LAYERS:
 
     pred_res = probe_res.predict(test_h_res_scaled)
     accuracy_res[l] = accuracy_score(test_labels, pred_res)
-    print(f"Layer {l} — full: {accuracy_full[l]:.4f}, emb: {accuracy_emb[l]:.4f}, res: {accuracy_res[l]:.4f}")
+    train_acc_res = probe_res.score(train_h_res_scaled, train_labels)
+    print(f"Layer {l} — full: {accuracy_full[l]:.4f} (train {train_acc_full:.4f}), emb: {accuracy_emb[l]:.4f} (train {train_acc_emb:.4f}), res: {accuracy_res[l]:.4f} (train {train_acc_res:.4f})")
 
     test_h_emb_scaled_full = scaler_activations.transform(test_h_emb)
     test_h_res_scaled_full = scaler_activations.transform(test_h_res)
