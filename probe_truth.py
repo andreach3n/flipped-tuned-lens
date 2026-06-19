@@ -84,7 +84,7 @@ for l in LAYERS:
     train_activations = scaler_activations.fit_transform(train_activations)
     test_activations = scaler_activations.transform(test_activations)
 
-    probe_full = LogisticRegression(max_iter=1000)
+    probe_full = LogisticRegression(max_iter=1000, C=0.1)
     probe_full.fit(train_activations, train_labels)
 
     pred_activations = probe_full.predict(test_activations)
@@ -94,7 +94,7 @@ for l in LAYERS:
     # probe for embeddings part
     scaler_emb = StandardScaler()
     train_h_emb_scaled, test_h_emb_scaled = scaler_emb.fit_transform(train_h_emb), scaler_emb.transform(test_h_emb)
-    probe_emb = LogisticRegression(max_iter=1000)
+    probe_emb = LogisticRegression(max_iter=1000, C=0.1)
     probe_emb.fit(train_h_emb_scaled, train_labels)
 
     pred_emb = probe_emb.predict(test_h_emb_scaled)
@@ -104,7 +104,7 @@ for l in LAYERS:
     # probe for residuals
     scaler_res = StandardScaler()
     train_h_res_scaled, test_h_res_scaled = scaler_res.fit_transform(train_h_res), scaler_res.transform(test_h_res)
-    probe_res = LogisticRegression(max_iter=1000)
+    probe_res = LogisticRegression(max_iter=1000, C=0.1)
     probe_res.fit(train_h_res_scaled, train_labels)
 
     pred_res = probe_res.predict(test_h_res_scaled)
