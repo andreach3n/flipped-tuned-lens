@@ -17,9 +17,15 @@ LAYERS = [5, 13, 21]
 STOP_LAYER = max(LAYERS) + 1
 D_MODEL = 2304
 
+df_cities_neg = pd.concat([
+    pd.read_csv("/workspace/cities.csv"),
+    pd.read_csv("/workspace/neg_cities.csv")
+], ignore_index=True)
+
 DATASETS = {
     "cities": pd.read_csv("/workspace/cities.csv"),
     "neg_cities": pd.read_csv("/workspace/neg_cities.csv"),
+    "cities+neg_cities": df_cities_neg,
     "common_claim": pd.read_csv("/workspace/common_claim_true_false.csv"),
     "companies": pd.read_csv("/workspace/companies_true_false.csv"),
     "smaller_than": pd.read_csv("/workspace/smaller_than.csv"),
