@@ -27,6 +27,13 @@ df_confounded = pd.concat([
     pd.read_csv("/workspace/neg_cities.csv").query("label == 0")
 ], ignore_index=True)
 
+df_cities = pd.read_csv("/workspace/cities.csv")
+df_neg_cities = pd.read_csv("/workspace/neg_cities.csv")
+
+df_cities_true = df_cities[df_cities["label"] == 1]
+df_cities_false = df_cities[df_cities["label"] == 0]
+df_neg_cities_true = df_neg_cities[df_neg_cities["label"] == 1]
+df_neg_cities_false = df_neg_cities[df_neg_cities["label"] == 0]
 # DATASETS = {
 #     "cities": pd.read_csv("/workspace/cities.csv"),
 #     "neg_cities": pd.read_csv("/workspace/neg_cities.csv"),
@@ -37,10 +44,20 @@ df_confounded = pd.concat([
 #     "sp_en_trans": pd.read_csv("/workspace/sp_en_trans.csv"),
 # }
 
-DATASETS = {
+TRAIN_DATASETS = {
     "confounded": df_confounded,
-    "cities": pd.read_csv("/workspace/cities.csv"),
-    "neg_cities": pd.read_csv("/workspace/neg_cities.csv"),
+    "cities": df_cities,
+    "neg_cities": df_neg_cities,
+}
+
+TEST_DATASETS = {
+    "confounded": df_confounded,
+    "cities": df_cities,
+    "neg_cities": df_neg_cities,
+    "cities_true": df_cities_true,
+    "cities_false": df_cities_false,
+    "neg_cities_true": df_neg_cities_true,
+    "neg_cities_false": df_neg_cities_false,
 }
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
@@ -56,9 +73,9 @@ for path in sorted(glob.glob("/workspace/linear_map_layer_*.pt")):
 names_filter = ["hook_embed"] + [f"blocks.{l}.hook_resid_post" for l in LAYERS]
 
 dataset_data = {}
-for dataset in DATASETS:
-    statements = DATASETS[dataset]["statement"].tolist()
-    labels = np.array(DATASETS[dataset]["label"].tolist())
+for dataset in TEST_DATASETS:
+    statements = TEST_DATASETS[dataset]["statement"].tolist()
+    labels = np.array(TEST_DATASETS[dataset]["label"].tolist())
 
     embeddings = []
     activations_by_layer = {l: [] for l in LAYERS}
@@ -86,8 +103,8 @@ test_accuracy_full = {}
 test_accuracy_emb = {}
 test_accuracy_res = {}
 
-for train_dataset in DATASETS:
-    for test_dataset in DATASETS:
+for train_dataset in TRAIN_DATASETS:
+    for test_dataset in TEST_DATASETS:
         for l in LAYERS:
             with t.no_grad():
                 linear_map[l].eval()
@@ -128,7 +145,9 @@ for train_dataset in DATASETS:
             test_accuracy_res[(train_dataset, test_dataset, l)] = accuracy_score(dataset_data[test_dataset][2], pred_res)
             train_accuracy_res[(train_dataset, test_dataset, l)] = probe_res.score(train_h_res_scaled, dataset_data[train_dataset][2])
 
-dataset_names = list(DATASETS.keys())
+# dataset_names = list(DATASETS.keys())
+train_names = list(TRAIN_DATASETS.keys())
+test_names = list(TEST_DATASETS.keys())
 
 for component, acc_dict in [("full", test_accuracy_full), ("embedding", test_accuracy_emb), ("residual", test_accuracy_res)]:
     fig, axes = plt.subplots(1, len(LAYERS), figsize=(6 * len(LAYERS), 5))
@@ -136,20 +155,21 @@ for component, acc_dict in [("full", test_accuracy_full), ("embedding", test_acc
         axes = [axes]
     for ax, l in zip(axes, LAYERS):
         grid = np.array([
-            [acc_dict[(train, test, l)] for test in dataset_names]
-            for train in dataset_names
+            [acc_dict[(train, test, l)] for test in test_names]
+            for train in train_names
         ])
         im = ax.imshow(grid, vmin=0, vmax=1, cmap="RdYlGn")
-        ax.set_xticks(range(len(dataset_names)))
-        ax.set_yticks(range(len(dataset_names)))
-        ax.set_xticklabels(dataset_names, rotation=45, ha="right")
-        ax.set_yticklabels(dataset_names)
+        ax.set_xticks(range(len(test_names)))
+        ax.set_yticks(range(len(train_names)))
+        ax.set_xticklabels(test_names, rotation=45, ha="right")
+        ax.set_yticklabels(train_names)
         ax.set_xlabel("test dataset")
         ax.set_ylabel("train dataset")
         ax.set_title(f"Layer {l}")
-        for i in range(len(dataset_names)):
-            for j in range(len(dataset_names)):
+        for i in range(len(train_names)):
+            for j in range(len(test_names)):
                 ax.text(j, i, f"{grid[i, j]:.2f}", ha="center", va="center", fontsize=8)
+
     fig.colorbar(im, ax=axes[-1], fraction=0.046, pad=0.04)
     fig.suptitle(f"Cross-dataset probe accuracy — {component}")
     fig.tight_layout()
