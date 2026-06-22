@@ -22,14 +22,25 @@ df_cities_neg = pd.concat([
     pd.read_csv("/workspace/neg_cities.csv")
 ], ignore_index=True)
 
+df_confounded = pd.concat([
+    pd.read_csv("/workspace/cities.csv").query("label == 1"),
+    pd.read_csv("/workspace/neg_cities.csv").query("label == 0")
+], ignore_index=True)
+
+# DATASETS = {
+#     "cities": pd.read_csv("/workspace/cities.csv"),
+#     "neg_cities": pd.read_csv("/workspace/neg_cities.csv"),
+#     "cities+neg_cities": df_cities_neg,
+#     "common_claim": pd.read_csv("/workspace/common_claim_true_false.csv"),
+#     "companies": pd.read_csv("/workspace/companies_true_false.csv"),
+#     "smaller_than": pd.read_csv("/workspace/smaller_than.csv"),
+#     "sp_en_trans": pd.read_csv("/workspace/sp_en_trans.csv"),
+# }
+
 DATASETS = {
+    "confounded": df_confounded,
     "cities": pd.read_csv("/workspace/cities.csv"),
     "neg_cities": pd.read_csv("/workspace/neg_cities.csv"),
-    "cities+neg_cities": df_cities_neg,
-    "common_claim": pd.read_csv("/workspace/common_claim_true_false.csv"),
-    "companies": pd.read_csv("/workspace/companies_true_false.csv"),
-    "smaller_than": pd.read_csv("/workspace/smaller_than.csv"),
-    "sp_en_trans": pd.read_csv("/workspace/sp_en_trans.csv"),
 }
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
@@ -142,4 +153,4 @@ for component, acc_dict in [("full", test_accuracy_full), ("embedding", test_acc
     fig.colorbar(im, ax=axes[-1], fraction=0.046, pad=0.04)
     fig.suptitle(f"Cross-dataset probe accuracy — {component}")
     fig.tight_layout()
-    fig.savefig(f"/workspace/probe_grid_{component}.png", dpi=150)
+    fig.savefig(f"/workspace/probe_grid_{component}_confounded.png", dpi=150)
