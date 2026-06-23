@@ -48,12 +48,14 @@ TRAIN_DATASETS = {
     "confounded": df_confounded,
     "cities": df_cities,
     "neg_cities": df_neg_cities,
+    "cities+neg_cities": df_cities_neg,
 }
 
 TEST_DATASETS = {
     "confounded": df_confounded,
     "cities": df_cities,
     "neg_cities": df_neg_cities,
+    "cities+neg_cities": df_cities_neg,
     "cities_true": df_cities_true,
     "cities_false": df_cities_false,
     "neg_cities_true": df_neg_cities_true,
@@ -173,4 +175,4 @@ for component, acc_dict in [("full", test_accuracy_full), ("embedding", test_acc
     fig.colorbar(im, ax=axes[-1], fraction=0.046, pad=0.04)
     fig.suptitle(f"Cross-dataset probe accuracy — {component}")
     fig.tight_layout()
-    fig.savefig(f"/workspace/probe_grid_{component}_confounded.png", dpi=150)
+    fig.savefig(f"/workspace/probe_grid_{component}_confounded_2.png", dpi=150)
