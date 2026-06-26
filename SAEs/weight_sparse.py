@@ -7,6 +7,8 @@ from tiktoken import Encoding
 from circuit_sparsity.tiktoken_ext import tinypython
 import networkx as nx
 from tabulate import tabulate
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 
 sd = torch.load(io.BytesIO(read_file_cached(f"{MODEL_BASE_DIR}/models/csp_yolo1/final_model.pt")), weights_only=True, map_location="cpu")
 embd = sd["transformer.wte.weight"]
@@ -84,3 +86,39 @@ print(sorted([len(c) for c in communities], reverse=True))
 
 for c in sorted(communities, key=len, reverse=True)[:7]:
     print(len(c), [enc.decode([i]) for i in c])
+
+
+# ---- graph figure: nodes colored by community ----
+# keep the largest communities so the picture stays legible
+top = sorted(communities, key=len, reverse=True)[:8]
+
+# map each node id -> index of the community it belongs to
+node_comm = {}
+for idx, comm in enumerate(top):
+    for n in comm:
+        node_comm[n] = idx
+
+# subgraph of just those nodes
+H = G.subgraph(node_comm).copy()
+
+# drop weak edges so the communities visually separate, then drop now-isolated nodes
+EDGE_THRESH = 2
+H.remove_edges_from([(u, v) for u, v, w in H.edges(data="weight") if w < EDGE_THRESH])
+H.remove_nodes_from(list(nx.isolates(H)))
+
+palette = list(plt.cm.tab10.colors)
+node_colors = [palette[node_comm[n] % 10] for n in H.nodes]
+
+layout = nx.spring_layout(H, seed=0, weight="weight", iterations=100)
+plt.figure(figsize=(14, 14))
+nx.draw_networkx_edges(H, layout, alpha=0.05, width=0.5)
+nx.draw_networkx_nodes(H, layout, node_color=node_colors, node_size=30)
+handles = [mpatches.Patch(color=palette[i % 10], label=f"community {i} (n={len(c)})")
+           for i, c in enumerate(top)]
+plt.legend(handles=handles, loc="best", fontsize=8)
+plt.title("csp_yolo1 token graph — nodes colored by community")
+plt.axis("off")
+
+fig_path = os.path.join(os.path.dirname(__file__), "community_graph.png")
+plt.savefig(fig_path, dpi=200, bbox_inches="tight")
+print("saved", fig_path)
