@@ -62,13 +62,18 @@ A.fill_diagonal_(0)                        # drop self-loops
 A = A * (A >= 3)                           # drop weak single-feature links so the graph stays sparse
 
 G = nx.from_numpy_array(A.cpu().numpy())
-communities = nx.community.louvain_communities(G, weight="weight", seed=0, resolution=2.0)
+communities = nx.community.louvain_communities(G, weight="weight", seed=0, resolution=4.0)
 print(len(communities))
 print(sorted([len(c) for c in communities], reverse=True))
 
-out_path = os.path.join(os.path.dirname(__file__), "communities.txt")
+# look at mid-sized communities (not the giant generic hubs, not singletons) —
+# this band is where coherent themes like "months" or "country names" live
+MIN_SIZE, MAX_SIZE = 30, 300
+band = [c for c in communities if MIN_SIZE <= len(c) <= MAX_SIZE]
+
+out_path = os.path.join(os.path.dirname(__file__), "communities_30_300.txt")
 with open(out_path, "w") as f:
-    for c in sorted(communities, key=len, reverse=True)[:10]:
+    for c in sorted(band, key=len, reverse=True):
         words = [model.tokenizer.decode([keep_ids[i]]) for i in c]
         f.write(f"{len(c)} {words}\n\n")   # blank line between communities
-print("saved", out_path)
+print(f"saved {len(band)} communities (size {MIN_SIZE}-{MAX_SIZE}) to {out_path}")
