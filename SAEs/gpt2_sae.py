@@ -48,22 +48,22 @@ keep_ids = []
 for i in range(X.shape[0]):
     if is_filter(i):
         keep_ids.append(i)
-
+keep = t.tensor(keep_ids, device=device)
 print(len(keep_ids))
 
-# # build the token graph over a manageable slice of the vocab (graph only — the
-# # SAE was trained on all 50k embeddings above)
-# with t.no_grad():
-#     F = trainer.ae.encode(X)           # [N, 8192]
-# mask = (F > 0)
-# A = mask.float() @ mask.float().T          # [N, N]: # of features each token pair shares
-# A.fill_diagonal_(0)                        # drop self-loops
-# A = A * (A >= 3)                           # drop weak single-feature links so the graph stays sparse
+# build the token graph over a manageable slice of the vocab (graph only — the
+# SAE was trained on all 50k embeddings above)
+with t.no_grad():
+    F = trainer.ae.encode(X[keep])           # [N, 8192]
+mask = (F > 0)
+A = mask.float() @ mask.float().T          # [N, N]: # of features each token pair shares
+A.fill_diagonal_(0)                        # drop self-loops
+A = A * (A >= 3)                           # drop weak single-feature links so the graph stays sparse
 
-# G = nx.from_numpy_array(A.cpu().numpy())
-# communities = nx.community.louvain_communities(G, weight="weight", seed=0, resolution=2.0)
-# print(len(communities))
-# print(sorted([len(c) for c in communities], reverse=True))
+G = nx.from_numpy_array(A.cpu().numpy())
+communities = nx.community.louvain_communities(G, weight="weight", seed=0, resolution=2.0)
+print(len(communities))
+print(sorted([len(c) for c in communities], reverse=True))
 
-# for c in sorted(communities, key=len, reverse=True)[:7]:
-#     print(len(c), [model.tokenizer.decode([i]) for i in c])
+for c in sorted(communities, key=len, reverse=True)[:10]:
+    print(len(c), [model.tokenizer.decode([keep_ids[i]]) for i in c])
