@@ -1,3 +1,4 @@
+import os
 import sys
 import torch as t
 import networkx as nx
@@ -65,5 +66,9 @@ communities = nx.community.louvain_communities(G, weight="weight", seed=0, resol
 print(len(communities))
 print(sorted([len(c) for c in communities], reverse=True))
 
-for c in sorted(communities, key=len, reverse=True)[:10]:
-    print(len(c), [model.tokenizer.decode([keep_ids[i]]) for i in c])
+out_path = os.path.join(os.path.dirname(__file__), "communities.txt")
+with open(out_path, "w") as f:
+    for c in sorted(communities, key=len, reverse=True)[:10]:
+        words = [model.tokenizer.decode([keep_ids[i]]) for i in c]
+        f.write(f"{len(c)} {words}\n\n")   # blank line between communities
+print("saved", out_path)
