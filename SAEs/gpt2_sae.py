@@ -21,12 +21,12 @@ X = model.W_E.detach().to(device)    # [50257, 768]
 d_model = 768
 X = X * (d_model ** 0.5) / X.norm(dim=-1).mean()
 
-STEPS = 40000
-trainer = TopKTrainer(steps=40000, activation_dim=768, dict_size=8192, k=32,
+STEPS = 20000
+trainer = TopKTrainer(steps=STEPS, activation_dim=768, dict_size=8192, k=32,
                       layer=0, lm_name="gpt2", device=device)
 trainer.dead_feature_threshold = 1_000_000
 
-for step in range(40000):
+for step in range(STEPS):
     idx = t.randint(0, X.shape[0], (4096,), device=device)
     loss = trainer.update(step, X[idx])
 
@@ -48,10 +48,10 @@ with t.no_grad():
 mask = (F > 0)
 A = mask.float() @ mask.float().T          # [N, N]: # of features each token pair shares
 A.fill_diagonal_(0)                        # drop self-loops
-A = A * (A >= 2)                           # drop weak single-feature links so the graph stays sparse
+A = A * (A >= 3)                           # drop weak single-feature links so the graph stays sparse
 
 G = nx.from_numpy_array(A.cpu().numpy())
-communities = nx.community.louvain_communities(G, weight="weight", seed=0, resolution=2.0)
+communities = nx.community.louvain_communities(G, weight="weight", seed=0, resolution=3.0)
 print(len(communities))
 print(sorted([len(c) for c in communities], reverse=True))
 
