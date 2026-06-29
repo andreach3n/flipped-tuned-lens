@@ -2,7 +2,10 @@ import os
 import sys
 import torch as t
 import networkx as nx
-sys.path.insert(0, "/Users/andrea/Documents/dictionary_learning")
+# dictionary_learning is cloned next to this script (in SAEs/) by default;
+# set the DL_PATH env var to override if your clone lives elsewhere.
+DL_PATH = os.environ.get("DL_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "dictionary_learning"))
+sys.path.insert(0, DL_PATH)
 from dictionary_learning.trainers.top_k import TopKTrainer
 from transformer_lens import HookedTransformer
 
