@@ -59,3 +59,4 @@ print(len(crime), top_latents)
 for j in top_latents.indices:
     fire = mask[:, j].nonzero().flatten().tolist()
     decoded_fire = [model.tokenizer.decode([keep_ids[pos]]) for pos in fire]
+    print(j.item(), int(top_latents.values[k]), decoded_fire[:30])
