@@ -31,6 +31,8 @@ for step in range(STEPS):
     idx = t.randint(0, X.shape[0], (4096,), device=device)
     loss = trainer.update(step, X[idx])
 
+t.save(trainer.ae.state_dict(), "sae.pt")
+
 # compute reconstruction error
 with t.no_grad():
     X_hat = trainer.ae(X)                      # [50257, 768], one shot
