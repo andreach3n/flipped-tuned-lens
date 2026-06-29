@@ -1,0 +1,8 @@
+# Generated SAE outputs / artifacts — regenerated on every run on each machine,
+# so they collide between Mac and the GPU box. Keep them local; don't version them.
+communities*.txt
+sae.pt
+*.pt
+
+# Cloned dependency, not our source code.
+dictionary_learning/
