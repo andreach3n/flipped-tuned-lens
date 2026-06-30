@@ -55,3 +55,5 @@ for seed in range(5):
 
 import json
 json.dump(results, open("crime_communities.json", "w"))
+json.dump(keep_ids, open("keep_ids.json", "w"))
+
