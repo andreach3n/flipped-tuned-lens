@@ -37,10 +37,11 @@ def data_provider_fn():
 # total_steps = total_training_samples / batch_size
 # l0_warm_up_steps = 0.1 * total_steps
 
-coefficients = np.geomspace(1e-2, 1e2, 12)
+coefficients = np.geomspace(1e-2, 1e2, 3)
 results = []
 BATCH = 4096
-total_training_samples = 82_000_000
+# 82_000_000
+total_training_samples = 2_000_000
 total_steps = total_training_samples/BATCH
 l0_warmup_steps = int(0.1 * total_steps)
 
