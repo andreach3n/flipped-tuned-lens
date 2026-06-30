@@ -40,22 +40,21 @@ A = A * (A >= 3)                           # drop weak single-feature links
 G = nx.from_numpy_array(A.cpu().numpy())
 
 # --- vary ONLY the louvain seed; SAE + graph are held fixed ---
-def crime_set(louvain_seed):
-    communities = nx.community.louvain_communities(G, weight="weight", seed=louvain_seed, resolution=4.0)
+def crime_set(louvain_seed, resolution):
+    communities = nx.community.louvain_communities(G, weight="weight", seed=louvain_seed, resolution=resolution)
     crime = next(c for c in communities if robber_idx in c)
     return {keep_ids[i] for i in crime}
-
-crime_sets = {s: crime_set(s) for s in range(5)}
-for s in range(5):
-    print(f"louvain seed {s}: |crime|={len(crime_sets[s])}")
 
 def jaccard(a, b):
     return len(a & b) / len(a | b)
 
-scores = []
-for i, j in combinations(range(5), 2):
-    r = jaccard(crime_sets[i], crime_sets[j])
-    scores.append(r)
-    print(f"louvain seeds {i},{j}:  jaccard={r:.3f}")
-
-print(f"\nmean jaccard (louvain-only) = {sum(scores)/len(scores):.3f}")
+# --- sweep resolution; at each, vary only the louvain seed and measure stability ---
+# lower resolution -> coarser, more stable communities, but risks merging crime with
+# adjacent themes (watch mean |crime| blow up). we want the lowest-jitter resolution
+# that's still specific.
+print(f"{'res':>5}  {'mean |crime|':>12}  {'mean jaccard':>12}")
+for resolution in (1.0, 1.5, 2.0, 3.0, 4.0):
+    crime_sets = {s: crime_set(s, resolution) for s in range(5)}
+    sizes = [len(crime_sets[s]) for s in range(5)]
+    scores = [jaccard(crime_sets[i], crime_sets[j]) for i, j in combinations(range(5), 2)]
+    print(f"{resolution:>5}  {sum(sizes)/len(sizes):>12.0f}  {sum(scores)/len(scores):>12.3f}")
