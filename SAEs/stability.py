@@ -8,10 +8,10 @@ universe = json.load(open("keep_ids.json"))
 communities = {int(s) : set(d["crime_ids"]) for s, d in results.items()}
 
 def jaccard(a, b):
-    return (a & b) / (a | b)
+    return len(a & b) / len(a | b)
 
 def containment(a, b):
-    return (a & b) / (min(len(a), len(b)))
+    return len(a & b) / (min(len(a), len(b)))
 
 for i, j in combinations(range(5), 2):
     a, b = communities[i], communities[j]
