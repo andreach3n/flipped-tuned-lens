@@ -41,7 +41,7 @@ coefficients = [1]
 # np.geomspace(1e-2, 1e1, 12)
 results = []
 BATCH = 4096
-total_training_samples = 600_000_000
+total_training_samples = 150_000_000
 total_steps = total_training_samples/BATCH
 l0_warmup_steps = int(0.1 * total_steps)
 
@@ -49,7 +49,7 @@ for coeff in coefficients:
     config = JumpReLUTrainingSAEConfig(d_in=768, d_sae=8192, device=device, jumprelu_sparsity_loss_mode="tanh", l0_coefficient=coeff, l0_warm_up_steps=l0_warmup_steps)
     sae = JumpReLUTrainingSAE(config, use_error_term=False)
 
-    trainer_config = SAETrainerConfig(total_training_samples=total_training_samples, train_batch_size_samples=BATCH, device=device, lr_end=3e-5)
+    trainer_config = SAETrainerConfig(total_training_samples=total_training_samples, train_batch_size_samples=BATCH, device=device, lr_scheduler_name="cossineannealing", lr_end=3e-5)
     trained_sae = SAETrainer(trainer_config, sae, data_provider_fn()).fit()
 
     with t.no_grad():
