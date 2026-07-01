@@ -49,7 +49,7 @@ for coeff in coefficients:
     config = JumpReLUTrainingSAEConfig(d_in=768, d_sae=8192, device=device, jumprelu_sparsity_loss_mode="tanh", l0_coefficient=coeff, l0_warm_up_steps=l0_warmup_steps)
     sae = JumpReLUTrainingSAE(config, use_error_term=False)
 
-    trainer_config = SAETrainerConfig(total_training_samples=total_training_samples, train_batch_size_samples=BATCH, device=device, lr_scheduler_name="cossineannealing", lr_end=3e-5)
+    trainer_config = SAETrainerConfig(total_training_samples=total_training_samples, train_batch_size_samples=BATCH, device=device, lr_scheduler_name="cosineannealing", lr_end=3e-5)
     trained_sae = SAETrainer(trainer_config, sae, data_provider_fn()).fit()
 
     with t.no_grad():
