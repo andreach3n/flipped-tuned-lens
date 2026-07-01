@@ -37,7 +37,7 @@ def data_provider_fn():
 # total_steps = total_training_samples / batch_size
 # l0_warm_up_steps = 0.1 * total_steps
 
-coefficients = [2, 5, 10]
+coefficients = [1]
 # np.geomspace(1e-2, 1e1, 12)
 results = []
 BATCH = 4096
@@ -65,48 +65,49 @@ for coeff in coefficients:
 
 # --- save raw results first, so a plotting bug can't cost you the runs ---
 results_arr = np.array(results)                       # [n_runs, 5]: coeff, seed, L0, fvu, dead
-np.save("sweep_results.npy", results_arr)
-print("saved raw results to sweep_results.npy")
+out_name = f"sweep_results_{total_training_samples}.npy"   # e.g. sweep_results_300000000.npy
+np.save(out_name, results_arr)
+print(f"saved raw results to {out_name}")
 
-# --- aggregate across seeds: mean per coefficient ---
-coeffs_all = results_arr[:, 0]                         # every run's coeff (repeats per seed)
-L0_all     = results_arr[:, 2]
-fvu_all    = results_arr[:, 3]
-dead_all   = results_arr[:, 4]
-
-uniq = np.unique(coeffs_all)                           # the 12 distinct coefficients
-mean_by_coeff = lambda vals: np.array([vals[coeffs_all == c].mean() for c in uniq])
-L0_mean, fvu_mean, dead_mean = mean_by_coeff(L0_all), mean_by_coeff(fvu_all), mean_by_coeff(dead_all)
-
-# --- plot ---
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
-
-# Panel 1: the plateau plot. Dots = individual seeds, line = mean.
-# Flat band in the mean AND tight dots = a real "sticky" L0; scattered dots = noise.
-ax1.scatter(coeffs_all, L0_all, color="C0", alpha=0.35, s=25, label="individual seeds")
-ax1.plot(uniq, L0_mean, "o-", color="C0", label="mean across seeds")
-ax1.set_xscale("log")
-ax1.set_yscale("log")
-ax1.set_xlabel("l0_coefficient (sparsity penalty)")
-ax1.set_ylabel("L0 (avg active features)")
-ax1.set_title("L0 vs sparsity penalty — flat band = sticky L0")
-ax1.legend()
-ax1.grid(True, which="both", alpha=0.3)
-
-# Panel 2: diagnostics — rules out "plateau is really feature death / bad recon".
-ax2.scatter(coeffs_all, fvu_all, color="C1", alpha=0.35, s=25)
-ax2.plot(uniq, fvu_mean, "s-", color="C1", label="FVU (reconstruction error)")
-ax2.scatter(coeffs_all, dead_all, color="C2", alpha=0.35, s=25)
-ax2.plot(uniq, dead_mean, "^-", color="C2", label="dead fraction")
-ax2.set_xscale("log")
-ax2.set_xlabel("l0_coefficient (sparsity penalty)")
-ax2.set_ylabel("fraction")
-ax2.set_title("reconstruction & dead features")
-ax2.set_ylim(0, 1)
-ax2.legend()
-ax2.grid(True, which="both", alpha=0.3)
-
-fig.tight_layout()
-fig.savefig("jumprelu_sweep_convergence.png", dpi=150)
-print("saved plot to jumprelu_sweep_convergence.png")
-plt.show()
+# --- aggregate + plot: commented out for the convergence check (1 coeff, no seeds).
+#     it's the seeded 5-column version; re-enable + restore the seed loop for the full sweep.
+# coeffs_all = results_arr[:, 0]                         # every run's coeff (repeats per seed)
+# L0_all     = results_arr[:, 2]
+# fvu_all    = results_arr[:, 3]
+# dead_all   = results_arr[:, 4]
+#
+# uniq = np.unique(coeffs_all)                           # the 12 distinct coefficients
+# mean_by_coeff = lambda vals: np.array([vals[coeffs_all == c].mean() for c in uniq])
+# L0_mean, fvu_mean, dead_mean = mean_by_coeff(L0_all), mean_by_coeff(fvu_all), mean_by_coeff(dead_all)
+#
+# fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+#
+# # Panel 1: the plateau plot. Dots = individual seeds, line = mean.
+# # Flat band in the mean AND tight dots = a real "sticky" L0; scattered dots = noise.
+# ax1.scatter(coeffs_all, L0_all, color="C0", alpha=0.35, s=25, label="individual seeds")
+# ax1.plot(uniq, L0_mean, "o-", color="C0", label="mean across seeds")
+# ax1.set_xscale("log")
+# ax1.set_yscale("log")
+# ax1.set_xlabel("l0_coefficient (sparsity penalty)")
+# ax1.set_ylabel("L0 (avg active features)")
+# ax1.set_title("L0 vs sparsity penalty — flat band = sticky L0")
+# ax1.legend()
+# ax1.grid(True, which="both", alpha=0.3)
+#
+# # Panel 2: diagnostics — rules out "plateau is really feature death / bad recon".
+# ax2.scatter(coeffs_all, fvu_all, color="C1", alpha=0.35, s=25)
+# ax2.plot(uniq, fvu_mean, "s-", color="C1", label="FVU (reconstruction error)")
+# ax2.scatter(coeffs_all, dead_all, color="C2", alpha=0.35, s=25)
+# ax2.plot(uniq, dead_mean, "^-", color="C2", label="dead fraction")
+# ax2.set_xscale("log")
+# ax2.set_xlabel("l0_coefficient (sparsity penalty)")
+# ax2.set_ylabel("fraction")
+# ax2.set_title("reconstruction & dead features")
+# ax2.set_ylim(0, 1)
+# ax2.legend()
+# ax2.grid(True, which="both", alpha=0.3)
+#
+# fig.tight_layout()
+# fig.savefig("jumprelu_sweep_convergence.png", dpi=150)
+# print("saved plot to jumprelu_sweep_convergence.png")
+# plt.show()
