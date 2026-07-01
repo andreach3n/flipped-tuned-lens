@@ -107,6 +107,6 @@ ax2.legend()
 ax2.grid(True, which="both", alpha=0.3)
 
 fig.tight_layout()
-fig.savefig("jumprelu_sweep1.png", dpi=150)
-print("saved plot to jumprelu_sweep1.png")
+fig.savefig("jumprelu_sweep_convergence.png", dpi=150)
+print("saved plot to jumprelu_sweep_convergence.png")
 plt.show()
