@@ -38,52 +38,68 @@ def data_provider_fn():
 # l0_warm_up_steps = 0.1 * total_steps
 
 coefficients = np.geomspace(1e-2, 1e1, 12)
+seeds = [0, 1, 2]
 results = []
 BATCH = 4096
 total_training_samples = 82_000_000
 total_steps = total_training_samples/BATCH
 l0_warmup_steps = int(0.1 * total_steps)
 
-for coeff in coefficients:
-    config = JumpReLUTrainingSAEConfig(d_in=768, d_sae=8192, device=device, jumprelu_sparsity_loss_mode="tanh", l0_coefficient=coeff, l0_warm_up_steps=l0_warmup_steps)
-    sae = JumpReLUTrainingSAE(config, use_error_term=False)
+for seed in seeds:
+    for coeff in coefficients:
+        t.manual_seed(seed)
+        config = JumpReLUTrainingSAEConfig(d_in=768, d_sae=8192, device=device, jumprelu_sparsity_loss_mode="tanh", l0_coefficient=coeff, l0_warm_up_steps=l0_warmup_steps)
+        sae = JumpReLUTrainingSAE(config, use_error_term=False)
 
-    trainer_config = SAETrainerConfig(total_training_samples=total_training_samples, train_batch_size_samples=BATCH, device=device, lr_end=3e-5)
-    trained_sae = SAETrainer(trainer_config, sae, data_provider_fn()).fit()
+        trainer_config = SAETrainerConfig(total_training_samples=total_training_samples, train_batch_size_samples=BATCH, device=device, lr_end=3e-5)
+        trained_sae = SAETrainer(trainer_config, sae, data_provider_fn()).fit()
 
-    with t.no_grad():
-        acts = trained_sae.encode(X)
-        L0 = (acts>0).sum(dim=1).float().mean().item()
-        X_hat = trained_sae(X)
-        fvu = ((X - X_hat).pow(2).sum() / (X - X.mean(0)).pow(2).sum()).item()
+        with t.no_grad():
+            acts = trained_sae.encode(X)
+            L0 = (acts>0).sum(dim=1).float().mean().item()
+            X_hat = trained_sae(X)
+            fvu = ((X - X_hat).pow(2).sum() / (X - X.mean(0)).pow(2).sum()).item()
 
-        dead_mask = (acts == 0).all(dim=0)
-        dead_fraction = dead_mask.float().mean().item()
-    results.append((coeff, L0, fvu, dead_fraction))
-    print(f"l0_coefficient={config.l0_coefficient}  L0={L0:.2f}  FVU={fvu:.4f}  dead={dead_fraction:.2%}")
+            dead_mask = (acts == 0).all(dim=0)
+            dead_fraction = dead_mask.float().mean().item()
+        results.append((coeff, seed, L0, fvu, dead_fraction))
+        print(f"l0_coefficient={config.l0_coefficient}  seed={seed}  L0={L0:.2f}  FVU={fvu:.4f}  dead={dead_fraction:.2%}")
 
 # --- save raw results first, so a plotting bug can't cost you the runs ---
-results_arr = np.array(results)                       # [n_coeffs, 4]: coeff, L0, fvu, dead
+results_arr = np.array(results)                       # [n_runs, 5]: coeff, seed, L0, fvu, dead
 np.save("sweep_results.npy", results_arr)
 print("saved raw results to sweep_results.npy")
 
-# --- plot ---
-coeffs, L0s, fvus, deads = results_arr.T              # unpack columns
+# --- aggregate across seeds: mean per coefficient ---
+coeffs_all = results_arr[:, 0]                         # every run's coeff (repeats per seed)
+L0_all     = results_arr[:, 2]
+fvu_all    = results_arr[:, 3]
+dead_all   = results_arr[:, 4]
 
+uniq = np.unique(coeffs_all)                           # the 12 distinct coefficients
+mean_by_coeff = lambda vals: np.array([vals[coeffs_all == c].mean() for c in uniq])
+L0_mean, fvu_mean, dead_mean = mean_by_coeff(L0_all), mean_by_coeff(fvu_all), mean_by_coeff(dead_all)
+
+# --- plot ---
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
-# Panel 1: the plateau plot. A flat band here = a "sticky" L0.
-ax1.plot(coeffs, L0s, "o-", color="C0")
+# Panel 1: the plateau plot. Dots = individual seeds, line = mean.
+# Flat band in the mean AND tight dots = a real "sticky" L0; scattered dots = noise.
+ax1.scatter(coeffs_all, L0_all, color="C0", alpha=0.35, s=25, label="individual seeds")
+ax1.plot(uniq, L0_mean, "o-", color="C0", label="mean across seeds")
 ax1.set_xscale("log")
 ax1.set_yscale("log")
 ax1.set_xlabel("l0_coefficient (sparsity penalty)")
 ax1.set_ylabel("L0 (avg active features)")
 ax1.set_title("L0 vs sparsity penalty — flat band = sticky L0")
+ax1.legend()
 ax1.grid(True, which="both", alpha=0.3)
 
 # Panel 2: diagnostics — rules out "plateau is really feature death / bad recon".
-ax2.plot(coeffs, fvus, "s-", color="C1", label="FVU (reconstruction error)")
-ax2.plot(coeffs, deads, "^-", color="C2", label="dead fraction")
+ax2.scatter(coeffs_all, fvu_all, color="C1", alpha=0.35, s=25)
+ax2.plot(uniq, fvu_mean, "s-", color="C1", label="FVU (reconstruction error)")
+ax2.scatter(coeffs_all, dead_all, color="C2", alpha=0.35, s=25)
+ax2.plot(uniq, dead_mean, "^-", color="C2", label="dead fraction")
 ax2.set_xscale("log")
 ax2.set_xlabel("l0_coefficient (sparsity penalty)")
 ax2.set_ylabel("fraction")
