@@ -41,7 +41,7 @@ coefficients = [1]
 # np.geomspace(1e-2, 1e1, 12)
 results = []
 BATCH = 4096
-total_training_samples = 150_000_000
+total_training_samples = 300_000_000
 total_steps = total_training_samples/BATCH
 l0_warmup_steps = int(0.1 * total_steps)
 
