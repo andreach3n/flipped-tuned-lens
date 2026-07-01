@@ -37,33 +37,31 @@ def data_provider_fn():
 # total_steps = total_training_samples / batch_size
 # l0_warm_up_steps = 0.1 * total_steps
 
-coefficients = np.geomspace(1e-2, 1e1, 12)
-seeds = [0, 1, 2]
+coefficients = [2, 5, 10]
+# np.geomspace(1e-2, 1e1, 12)
 results = []
 BATCH = 4096
-total_training_samples = 82_000_000
+total_training_samples = 300_000_000
 total_steps = total_training_samples/BATCH
 l0_warmup_steps = int(0.1 * total_steps)
 
-for seed in seeds:
-    for coeff in coefficients:
-        t.manual_seed(seed)
-        config = JumpReLUTrainingSAEConfig(d_in=768, d_sae=8192, device=device, jumprelu_sparsity_loss_mode="tanh", l0_coefficient=coeff, l0_warm_up_steps=l0_warmup_steps)
-        sae = JumpReLUTrainingSAE(config, use_error_term=False)
+for coeff in coefficients:
+    config = JumpReLUTrainingSAEConfig(d_in=768, d_sae=8192, device=device, jumprelu_sparsity_loss_mode="tanh", l0_coefficient=coeff, l0_warm_up_steps=l0_warmup_steps)
+    sae = JumpReLUTrainingSAE(config, use_error_term=False)
 
-        trainer_config = SAETrainerConfig(total_training_samples=total_training_samples, train_batch_size_samples=BATCH, device=device, lr_end=3e-5)
-        trained_sae = SAETrainer(trainer_config, sae, data_provider_fn()).fit()
+    trainer_config = SAETrainerConfig(total_training_samples=total_training_samples, train_batch_size_samples=BATCH, device=device, lr_end=3e-5)
+    trained_sae = SAETrainer(trainer_config, sae, data_provider_fn()).fit()
 
-        with t.no_grad():
-            acts = trained_sae.encode(X)
-            L0 = (acts>0).sum(dim=1).float().mean().item()
-            X_hat = trained_sae(X)
-            fvu = ((X - X_hat).pow(2).sum() / (X - X.mean(0)).pow(2).sum()).item()
+    with t.no_grad():
+        acts = trained_sae.encode(X)
+        L0 = (acts>0).sum(dim=1).float().mean().item()
+        X_hat = trained_sae(X)
+        fvu = ((X - X_hat).pow(2).sum() / (X - X.mean(0)).pow(2).sum()).item()
 
-            dead_mask = (acts == 0).all(dim=0)
-            dead_fraction = dead_mask.float().mean().item()
-        results.append((coeff, seed, L0, fvu, dead_fraction))
-        print(f"l0_coefficient={config.l0_coefficient}  seed={seed}  L0={L0:.2f}  FVU={fvu:.4f}  dead={dead_fraction:.2%}")
+        dead_mask = (acts == 0).all(dim=0)
+        dead_fraction = dead_mask.float().mean().item()
+    results.append((coeff, L0, fvu, dead_fraction))
+    print(f"l0_coefficient={config.l0_coefficient}  L0={L0:.2f}  FVU={fvu:.4f}  dead={dead_fraction:.2%}")
 
 # --- save raw results first, so a plotting bug can't cost you the runs ---
 results_arr = np.array(results)                       # [n_runs, 5]: coeff, seed, L0, fvu, dead
