@@ -40,7 +40,7 @@ def data_provider_fn():
 coefficients = np.geomspace(1e-2, 1e1, 12)
 results = []
 BATCH = 4096
-total_training_samples = 300_000_000
+total_training_samples = 150_000_000
 total_steps = total_training_samples/BATCH
 l0_warmup_steps = int(0.1 * total_steps)
 
@@ -98,6 +98,6 @@ ax2.legend()
 ax2.grid(True, which="both", alpha=0.3)
 
 fig.tight_layout()
-fig.savefig(f"jumprelu_sweep_12coeffs_300M.png", dpi=150)
-print(f"saved plot to jumprelu_sweep_12coeffs_300M.png")
+fig.savefig(f"jumprelu_sweep_12coeffs_150M.png", dpi=150)
+print(f"saved plot to jumprelu_sweep_12coeffs_150M.png")
 plt.show()
