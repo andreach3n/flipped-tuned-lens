@@ -45,8 +45,12 @@ for data in ds:
     activations.append(cache["blocks.13.hook_resid_post"].squeeze(0)[1:].cpu())
 
     count+=curr_tokens.shape[1]
-    if count >= 100000:
+    if count >= 30000:
         break
+
+# done with the model — free ~5 GB of GPU before the analysis
+del model
+t.cuda.empty_cache()
 
 tokens_flat = t.cat(tokens, dim=0)          # (N,)
 emb_flat    = t.cat(embeddings, dim=0).float().to(device)   # (N, d_model)  -> upcast from bf16
