@@ -12,18 +12,29 @@ from transformer_lens.hook_points import HookPoint
 from datasets import load_dataset
 import glob
 
+from transformers import AutoTokenizer
+tokenizer = AutoTokenizer.from_pretrained("google/gemma-2-2b")
+
 CACHE_DIR   = "/workspace/sae_cache_layer13"
 FULL_PATH   = f"{CACHE_DIR}/sae_full_final.pt"
 RESID_PATH  = f"{CACHE_DIR}/sae_resid_final.pt"
 P_PATH      = f"{CACHE_DIR}/P.pt"
 EVAL_N      = 100_000     # subset of tokens for the eval (memory-bounded)
-TOPK        = 100         # top activating examples per feature
+TOPK        = 20         # top activating examples per feature
 TRIVIAL_THRESH = 0.8      # modal-token fraction above this = "trivial"
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 
 h = t.cat(t.load(f"{CACHE_DIR}/layer_13_chunk_1.pt"), dim=0)[:EVAL_N]   # (100k, 2304)
 tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0)[:EVAL_N]   # (100k,)
 P = t.load(P_PATH, map_location=device)   # (V, 2304)
+
+# token_id -> normalized-word id map (needs P for vocab size)
+raw = tokenizer.convert_ids_to_tokens(list(range(P.shape[0])))   # one string per token id
+norm_to_id, rows = {}, []
+for s in raw:
+    key = s.replace("▁", "").strip().lower()   # "▁Happy" / "happy" / " happy" -> "happy"
+    rows.append(norm_to_id.setdefault(key, len(norm_to_id)))
+norm_map = t.tensor(rows, device=device)       # (vocab,)  token_id -> normalized-word id
 
 def load_sae(path):
     ckpt = t.load(path, weights_only=False)
@@ -51,27 +62,34 @@ a_full  = feature_acts(sae_full,  scale_full,  "full")    # (N, 16384)
 a_resid = feature_acts(sae_resid, scale_resid, "resid")
 
 def triviality(a, tok):
-    """Per-feature modal-token fraction + the alive mask (fired >= TOPK times)."""
     vals, idx = a.topk(TOPK, dim=0)
     top_tokens = tok.to(idx.device)[idx]
-    modal_tok, _ = t.mode(top_tokens, dim=0)
-    modal_frac = (top_tokens == modal_tok).float().mean(dim=0)   # (16384,)
+    top_words  = norm_map.to(idx.device)[top_tokens]
+    # metric 1: modal-word fraction
+    modal_word, _ = t.mode(top_words, dim=0)
+    modal_frac = (top_words == modal_word).float().mean(dim=0)
+    # metric 2: number of distinct normalized words
+    sorted_words, _ = top_words.sort(dim=0)
+    n_distinct = 1 + (sorted_words[1:] != sorted_words[:-1]).sum(dim=0)
     alive = (a > 0).sum(dim=0) >= TOPK
-    return modal_frac, alive
+    return modal_frac, n_distinct, alive
 
 def report(name, a, tok):
-    modal_frac, alive = triviality(a, tok)
-    mf = modal_frac[alive]                    # distribution over ALIVE features only
+    modal_frac, n_distinct, alive = triviality(a, tok)
+    mf = modal_frac[alive]
+    nd = n_distinct[alive].float()                  # distribution over ALIVE features only
     print(f"\n=== {name} ===")
     print(f"alive features: {int(alive.sum())} / {alive.numel()}")
     print(f"modal_frac  mean {mf.mean().item():.4f} | median {mf.median().item():.4f}")
+    print(f"n_distinct  mean {nd.mean():.4f} | median {nd.median():.4f}  (of {TOPK}; lower=more trivial)")
+    print(f"frac single-word (n_distinct==1): {(nd == 1).float().mean():.4f}")
     # threshold sweep: does a gap appear at any cutoff?
     for thr in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
         print(f"  frac trivial @ {thr:.1f}: {(mf > thr).float().mean().item():.4f}")
-    return modal_frac, alive
+    return modal_frac, n_distinct, alive
 
-mf_full,  al_full  = report("FULL",  a_full,  tok)
-mf_resid, al_resid = report("RESID", a_resid, tok)
+mf_full,  nd_full, al_full  = report("FULL",  a_full,  tok)
+mf_resid, nd_resid, al_resid = report("RESID", a_resid, tok)
 
 # side-by-side shift in the distribution (over each SAE's own alive features)
 print("\n=== shift (resid - full) ===")
