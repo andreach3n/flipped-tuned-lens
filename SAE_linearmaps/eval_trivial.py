@@ -19,13 +19,16 @@ CACHE_DIR   = "/workspace/sae_cache_layer13"
 FULL_PATH   = f"{CACHE_DIR}/sae_full_final.pt"
 RESID_PATH  = f"{CACHE_DIR}/sae_resid_final.pt"
 P_PATH      = f"{CACHE_DIR}/P.pt"
-EVAL_N      = 100_000     # subset of tokens for the eval (memory-bounded)
+N_TOKENS = 4_000_000
+bs = 8192
+# EVAL_N      = 100_000     # subset of tokens for the eval (memory-bounded)
 TOPK        = 20         # top activating examples per feature
 TRIVIAL_THRESH = 0.8      # modal-token fraction above this = "trivial"
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 
-h = t.cat(t.load(f"{CACHE_DIR}/layer_13_chunk_1.pt"), dim=0)[:EVAL_N]   # (100k, 2304)
-tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0)[:EVAL_N]   # (100k,)
+# commenting out for streaming instead
+# h = t.cat(t.load(f"{CACHE_DIR}/layer_13_chunk_1.pt"), dim=0)[:EVAL_N]   # (100k, 2304)
+# tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0)[:EVAL_N]   # (100k,)
 P = t.load(P_PATH, map_location=device)   # (V, 2304)
 
 # token_id -> normalized-word id map (needs P for vocab size)
@@ -46,36 +49,80 @@ def load_sae(path):
 sae_full,  scale_full  = load_sae(FULL_PATH)
 sae_resid, scale_resid = load_sae(RESID_PATH)
 
-def feature_acts(sae, scale, mode, bs=8192):
-    outs = []
+# --- OLD: materialized the whole (N, 16384) matrix, OOMs past ~100k tokens ---
+# def feature_acts(sae, scale, mode, bs=8192):
+#     outs = []
+#     with t.no_grad():
+#         for start in range(0, h.shape[0], bs):         # encode in batches — BatchTopK makes
+#             hh = h[start:start+bs].float().to(device)  # several full-size copies internally
+#             tt = tok[start:start+bs].to(device)
+#             x = (hh - P[tt]) if mode == "resid" else hh
+#             a = sae.encode(x / scale)                  # (bs, 16384)
+#             outs.append(a.cpu())                       # accumulate on CPU to free GPU
+#     return t.cat(outs, dim=0)                          # (N, 16384) on CPU
+#
+# a_full  = feature_acts(sae_full,  scale_full,  "full")
+# a_resid = feature_acts(sae_resid, scale_resid, "resid")
+
+# --- NEW: stream over millions of tokens, keeping only a running top-K per feature ---
+def stream_topk(sae, scale, mode, n_tokens, K=TOPK, bs=bs):
+    F = sae.cfg.d_sae                                        # number of SAE features (16384)
+    # Running state — sized by FEATURES, never by tokens, so memory stays flat:
+    run_vals = t.full((K, F), -1e9, device=device)          # best-K activation values per feature; init very low so any real value wins
+    run_toks = t.zeros((K, F), dtype=t.long, device=device) # the token id behind each of those K values
+    freq = t.zeros(F, dtype=t.long, device=device)          # how many times each feature has fired (for alive + freq bins)
+    seen = 0                                                 # tokens processed so far
     with t.no_grad():
-        for start in range(0, h.shape[0], bs):         # encode in batches — BatchTopK makes
-            hh = h[start:start+bs].float().to(device)  # several full-size copies internally
-            tt = tok[start:start+bs].to(device)
-            x = (hh - P[tt]) if mode == "resid" else hh
-            a = sae.encode(x / scale)                  # (bs, 16384)
-            outs.append(a.cpu())                       # accumulate on CPU to free GPU
-    return t.cat(outs, dim=0)                          # (N, 16384) on CPU
+        for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
+            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")  # matching token-id chunk file
+            hc = t.cat(t.load(lf), dim=0)                   # one chunk of activations, on CPU (bf16)
+            tc = t.cat(t.load(tf), dim=0)                   # its token ids, on CPU
+            for start in range(0, hc.shape[0], bs):
+                hh = hc[start:start+bs].float().to(device)  # batch of activations -> GPU, float32
+                tt = tc[start:start+bs].to(device)          # batch of token ids   -> GPU
+                x = (hh - P[tt]) if mode == "resid" else hh # residualize (or not)
+                a = sae.encode(x / scale)                   # (b, F) feature activations
+                freq += (a > 0).sum(dim=0)                  # tally firings per feature this batch
+                # ---- merge this batch into the running top-K ----
+                cat_vals = t.cat([run_vals, a], dim=0)                 # (K+b, F): old best stacked on new values
+                batch_toks = tt.unsqueeze(1).expand(-1, F)             # (b, F): same token id across every feature
+                cat_toks = t.cat([run_toks, batch_toks], dim=0)        # (K+b, F): token ids aligned with cat_vals
+                run_vals, sel = cat_vals.topk(K, dim=0)                # keep top-K values; sel = which rows won (K, F)
+                run_toks = cat_toks.gather(0, sel)                     # carry the matching token ids along
+                seen += hh.shape[0]
+                if seen >= n_tokens:
+                    return run_toks, freq
+    return run_toks, freq
 
-# item 4: feature activations for each SAE
-a_full  = feature_acts(sae_full,  scale_full,  "full")    # (N, 16384)
-a_resid = feature_acts(sae_resid, scale_resid, "resid")
+run_toks_full,  freq_full  = stream_topk(sae_full,  scale_full,  "full",  N_TOKENS)
+run_toks_resid, freq_resid = stream_topk(sae_resid, scale_resid, "resid", N_TOKENS)
 
-def triviality(a, tok):
-    vals, idx = a.topk(TOPK, dim=0)
-    top_tokens = tok.to(idx.device)[idx]
-    top_words  = norm_map.to(idx.device)[top_tokens]
+# --- OLD: took the full (N, F) matrix and did its own topk ---
+# def triviality(a, tok):
+#     vals, idx = a.topk(TOPK, dim=0)
+#     top_tokens = tok.to(idx.device)[idx]
+#     top_words  = norm_map.to(idx.device)[top_tokens]
+#     modal_word, _ = t.mode(top_words, dim=0)
+#     modal_frac = (top_words == modal_word).float().mean(dim=0)
+#     sorted_words, _ = top_words.sort(dim=0)
+#     n_distinct = 1 + (sorted_words[1:] != sorted_words[:-1]).sum(dim=0)
+#     alive = (a > 0).sum(dim=0) >= TOPK
+#     return modal_frac, n_distinct, alive
+
+# --- NEW: run_toks IS already the top-K token ids per feature (streamed) ---
+def triviality(run_toks, freq):
+    top_words = norm_map[run_toks]                          # (K, F): token ids -> normalized-word ids
     # metric 1: modal-word fraction
-    modal_word, _ = t.mode(top_words, dim=0)
-    modal_frac = (top_words == modal_word).float().mean(dim=0)
+    modal_word, _ = t.mode(top_words, dim=0)               # most common word per feature
+    modal_frac = (top_words == modal_word).float().mean(dim=0)   # fraction of the K that are it
     # metric 2: number of distinct normalized words
     sorted_words, _ = top_words.sort(dim=0)
     n_distinct = 1 + (sorted_words[1:] != sorted_words[:-1]).sum(dim=0)
-    alive = (a > 0).sum(dim=0) >= TOPK
+    alive = freq >= TOPK                                   # fired >= K times, else run_toks is junk-padded
     return modal_frac, n_distinct, alive
 
-def report(name, a, tok):
-    modal_frac, n_distinct, alive = triviality(a, tok)
+def report(name, run_toks, freq):
+    modal_frac, n_distinct, alive = triviality(run_toks, freq)
     mf = modal_frac[alive]
     nd = n_distinct[alive].float()                  # distribution over ALIVE features only
     print(f"\n=== {name} ===")
@@ -88,8 +135,8 @@ def report(name, a, tok):
         print(f"  frac trivial @ {thr:.1f}: {(mf > thr).float().mean().item():.4f}")
     return modal_frac, n_distinct, alive
 
-mf_full,  nd_full, al_full  = report("FULL",  a_full,  tok)
-mf_resid, nd_resid, al_resid = report("RESID", a_resid, tok)
+mf_full,  nd_full,  al_full  = report("FULL",  run_toks_full,  freq_full)
+mf_resid, nd_resid, al_resid = report("RESID", run_toks_resid, freq_resid)
 
 # side-by-side shift in the distribution (over each SAE's own alive features)
 print("\n=== shift (resid - full) ===")
