@@ -36,9 +36,12 @@ sae_full,  scale_full  = load_sae(FULL_PATH)
 sae_resid, scale_resid = load_sae(RESID_PATH)
 
 def feature_acts(sae, scale, mode):
-    x = (h - P[tok]) if mode == "resid" else h     # same transform as training
-    x = x / scale
-    a = sae.encode(x)   # (N, 16384) — do it in batches (see memory note)
+    with t.no_grad():
+        hh = h.float().to(device)                      # cache is CPU + bf16 -> GPU + float32
+        tt = tok.to(device)
+        x = (hh - P[tt]) if mode == "resid" else hh    # same transform as training
+        a = sae.encode(x / scale)   # (N, 16384)
+    return a
 
 # item 4: feature activations for each SAE
 a_full  = feature_acts(sae_full,  scale_full,  "full")    # (N, 16384)
