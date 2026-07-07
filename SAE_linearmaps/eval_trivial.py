@@ -26,7 +26,7 @@ tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0)[:EVAL_N]   # (100
 P = t.load(P_PATH, map_location=device)   # (V, 2304)
 
 def load_sae(path):
-    ckpt = t.load(path)
+    ckpt = t.load(path, weights_only=False)
     sae = BatchTopKTrainingSAE(ckpt["cfg"])   # cfg was saved in the checkpoint
     sae.load_state_dict(ckpt["sae"])
     sae.to(device).eval()
