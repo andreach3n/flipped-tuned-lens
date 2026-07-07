@@ -176,3 +176,39 @@ for (lo, hi), fb, rb in zip(zip(edges[:-1], edges[1:]), full_bins, resid_bins):
     rng = f"{int(lo)}-{hi_s}"
     print(f"{rng:>14} | {fb[0]:>6} {fb[1]:>5.3f} {fb[2]:>5.2f} {fb[3]:>5.3f}        | "
           f"{rb[0]:>6} {rb[1]:>5.3f} {rb[2]:>5.2f} {rb[3]:>5.3f}")
+
+# --- eyeball features: print top activating examples with context (Neuronpedia-style) ---
+# Re-streams a small slice, keeping only the chosen features' activations + token positions,
+# then prints each feature's top-K firings with a surrounding window of tokens.
+def inspect(sae, scale, mode, feat_ids, n_tokens=200_000, window=8, top=20, bs=8192):
+    feat_ids = t.tensor(feat_ids, device=device)
+    acts_parts, toks_parts, seen = [], [], 0
+    with t.no_grad():
+        for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
+            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
+            hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
+            for start in range(0, hc.shape[0], bs):
+                hh = hc[start:start+bs].float().to(device)
+                tt = tc[start:start+bs].to(device)
+                x = (hh - P[tt]) if mode == "resid" else hh
+                a = sae.encode(x / scale)[:, feat_ids]      # only the chosen features
+                acts_parts.append(a.cpu()); toks_parts.append(tt.cpu())
+                seen += hh.shape[0]
+                if seen >= n_tokens: break
+            if seen >= n_tokens: break
+    acts = t.cat(acts_parts, dim=0)                          # (N, n_feats)
+    toks = t.cat(toks_parts, dim=0)                          # (N,)
+    for j, f in enumerate(feat_ids.tolist()):
+        vals, idx = acts[:, j].topk(top)
+        print(f"\n### feature {f} ###")
+        for p, v in zip(idx.tolist(), vals.tolist()):
+            lo, hi = max(0, p - window), p + window + 1
+            ctx   = tokenizer.decode(toks[lo:hi].tolist())
+            focus = tokenizer.decode([toks[p].item()])
+            print(f"  [{v:6.1f}] ...{ctx}...   <<{focus!r}>>")
+
+# pick single-word features in the anomalous 100-1000 band of the RESID SAE
+band = al_resid & (freq_resid >= 100) & (freq_resid < 1000) & (nd_resid == 1)
+feat_ids = band.nonzero().squeeze(1)[:10].tolist()          # first 10 such features
+print(f"\n=== inspecting {len(feat_ids)} single-word resid features (100-1000 band) ===")
+inspect(sae_resid, scale_resid, "resid", feat_ids)
