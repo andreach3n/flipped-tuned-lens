@@ -144,3 +144,35 @@ print(f"mean modal_frac:   full {mf_full[al_full].mean().item():.4f}  "
       f"resid {mf_resid[al_resid].mean().item():.4f}")
 print(f"median modal_frac: full {mf_full[al_full].median().item():.4f}  "
       f"resid {mf_resid[al_resid].median().item():.4f}")
+
+# --- frequency-binned comparison: controls for the firing-rate confound ---
+# For each SAE, group its ALIVE features by how often they fired (freq), then compare
+# triviality WITHIN each band. If resid is still more trivial at matched frequency,
+# the effect is real; if it only shows across bins, it was a frequency artifact.
+def freq_binned(mf, nd, freq, alive, edges):
+    nd = nd.float()
+    out = []
+    for lo, hi in zip(edges[:-1], edges[1:]):
+        m = alive & (freq >= lo) & (freq < hi)         # alive features whose firing count lands in [lo, hi)
+        n = int(m.sum())
+        if n == 0:
+            out.append((0, float("nan"), float("nan"), float("nan")))
+        else:
+            out.append((n,
+                        mf[m].mean().item(),           # mean modal-word fraction in this band
+                        nd[m].mean().item(),           # mean # distinct words in this band
+                        (nd[m] == 1).float().mean().item()))  # frac pure single-word in this band
+    return out
+
+edges = [TOPK, 100, 1000, 10000, 100000, float("inf")]
+full_bins  = freq_binned(mf_full,  nd_full,  freq_full,  al_full,  edges)
+resid_bins = freq_binned(mf_resid, nd_resid, freq_resid, al_resid, edges)
+
+print("\n=== triviality by firing-frequency bin ===")
+print(f"{'freq range':>14} | {'n':>6} {'mf':>5} {'ndist':>5} {'1word':>5} (full) | "
+      f"{'n':>6} {'mf':>5} {'ndist':>5} {'1word':>5} (resid)")
+for (lo, hi), fb, rb in zip(zip(edges[:-1], edges[1:]), full_bins, resid_bins):
+    hi_s = "inf" if hi == float("inf") else str(int(hi))
+    rng = f"{int(lo)}-{hi_s}"
+    print(f"{rng:>14} | {fb[0]:>6} {fb[1]:>5.3f} {fb[2]:>5.2f} {fb[3]:>5.3f}        | "
+          f"{rb[0]:>6} {rb[1]:>5.3f} {rb[2]:>5.2f} {rb[3]:>5.3f}")
