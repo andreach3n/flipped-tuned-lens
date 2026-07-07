@@ -181,9 +181,10 @@ def top_token_of(sae, scale, mode, feat_ids, n_tokens=500_000, bs=8192):
             if seen >= n_tokens: break
     return best_tok
 
-def best_resid_feature_per_word(word_tokid_sets, dense_mask, n_tokens=500_000, bs=8192):
-    """One resid pass: per word (a set of token ids), the non-dense feature with highest mean activation."""
-    W = len(word_tokid_sets); F = sae_resid.cfg.d_sae
+def best_feature_per_word(sae, scale, mode, word_tokid_sets, dense_mask, n_tokens=2_000_000, bs=8192):
+    """One pass over `sae`: per word (a set of token ids), the non-dense feature with highest
+    mean activation on that word. Returns (feat_id, mean_act, n_occurrences) per word."""
+    W = len(word_tokid_sets); F = sae.cfg.d_sae
     acc = t.zeros(W, F, device=device); cnt = t.zeros(W, device=device)
     tgts = [t.tensor(sorted(s), device=device) for s in word_tokid_sets]
     seen = 0
@@ -193,7 +194,8 @@ def best_resid_feature_per_word(word_tokid_sets, dense_mask, n_tokens=500_000, b
             hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
             for start in range(0, hc.shape[0], bs):
                 hh = hc[start:start+bs].float().to(device); tt = tc[start:start+bs].to(device)
-                a = sae_resid.encode((hh - P[tt]) / scale_resid)   # resid input
+                x = (hh - P[tt]) if mode == "resid" else hh
+                a = sae.encode(x / scale)
                 for wi, tg in enumerate(tgts):
                     m = t.isin(tt, tg)
                     if m.any():
@@ -208,31 +210,42 @@ def best_resid_feature_per_word(word_tokid_sets, dense_mask, n_tokens=500_000, b
         out.append((int(mean_act.argmax()), float(mean_act.max()), int(cnt[wi].item())))
     return out
 
-def matched_pairs(n=25):
+def _classify(res, nd, min_occ=50):
+    """res: list of (feat, mean_act, occ). Classify each; skip words too rare to judge."""
+    rows, counts = [], {"single-token": 0, "multi-word": 0, "absent": 0, "rare(skip)": 0}
+    for (rf, ract, occ) in res:
+        if occ < min_occ:                                    # word too rare in the sample to judge
+            cls, fnd = "rare(skip)", -1
+        elif ract < 1.0:                                     # no real detector for this word
+            cls, fnd = "absent", -1
+        else:
+            fnd = int(nd[rf]); cls = "single-token" if fnd == 1 else "multi-word"
+        rows.append((rf, fnd, cls)); counts[cls] += 1
+    return rows, counts
+
+def _dense(freq):
+    f = freq.to(device).float()
+    return (f / (f.sum() / 64.0)) > 0.10                     # always-on features (rate > 10%, avg L0 = 64)
+
+def matched_pairs(n=25, n_tokens=2_000_000, min_occ=50):
     sf = t.load(f"{CACHE_DIR}/stats_full.pt"); sr = t.load(f"{CACHE_DIR}/stats_resid.pt")
     nm = _norm_map()
     # sample n single-token, alive FULL features (spread across the index range)
     cand = (sf["alive"] & (sf["nd"] == 1)).nonzero().squeeze(1)
     full_feats = cand[t.linspace(0, len(cand) - 1, min(n, len(cand))).long()].tolist()
-    # each full feature's top token -> normalized word -> all token-id variants of that word
-    toks = top_token_of(sae_full, scale_full, "full", full_feats).tolist()
+    toks = top_token_of(sae_full, scale_full, "full", full_feats, n_tokens=1_000_000).tolist()
     words = [tokenizer.decode([tk]).strip().lower() for tk in toks]
     word_ids = [set((nm == nm[tk].item()).nonzero().squeeze(1).tolist()) for tk in toks]
-    # resid always-on features to exclude (rate = freq / approx-#tokens, avg L0 = 64)
-    freq = sr["freq"].to(device).float()
-    dense = (freq / (freq.sum() / 64.0)) > 0.10
-    # find the resid counterpart for each word, then classify
-    res = best_resid_feature_per_word(word_ids, dense)
-    nd_resid = sr["nd"].to(device)
-    counts = {"single-token": 0, "multi-word": 0, "absent": 0}
-    print(f"\n=== matched pairs: {len(full_feats)} single-token FULL features -> RESID counterpart ===")
-    for ff, w, (rf, ract, occ) in zip(full_feats, words, res):
-        if occ < 20 or ract < 1.0:                           # resid has no real detector for this word
-            cls, rnd = "absent", -1
-        else:
-            rnd = int(nd_resid[rf]); cls = "single-token" if rnd == 1 else "multi-word"
-        counts[cls] += 1
-        print(f"  {w!r:18} full#{ff:<6} -> resid#{rf:<6} nd={rnd:>2}  {cls}")
-    print(f"\nsummary: {counts}")
+    # resid counterpart AND full->full control (noise floor)
+    res_r = best_feature_per_word(sae_resid, scale_resid, "resid", word_ids, _dense(sr["freq"]), n_tokens)
+    res_f = best_feature_per_word(sae_full,  scale_full,  "full",  word_ids, _dense(sf["freq"]), n_tokens)
+    rows_r, cnt_r = _classify(res_r, sr["nd"].to(device), min_occ)
+    rows_f, cnt_f = _classify(res_f, sf["nd"].to(device), min_occ)
+    print(f"\n=== matched pairs: {len(full_feats)} single-token FULL features (>= {min_occ} occ) ===")
+    print(f"{'word':16} {'full#':>6} | {'resid#':>6} {'nd':>3} {'class':>12} | {'ctrl#':>6} {'nd':>3} {'class':>12}")
+    for ff, w, (rr, rnd, rc), (fr, fnd, fc) in zip(full_feats, words, rows_r, rows_f):
+        print(f"{w!r:16} {ff:>6} | {rr:>6} {rnd:>3} {rc:>12} | {fr:>6} {fnd:>3} {fc:>12}")
+    print(f"\nRESID counterpart: {cnt_r}")
+    print(f"FULL  control:     {cnt_f}   <- noise floor (should be mostly single-token)")
 
-matched_pairs(n=25)
+matched_pairs(n=100)
