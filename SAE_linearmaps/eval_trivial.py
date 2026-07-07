@@ -50,15 +50,32 @@ def feature_acts(sae, scale, mode, bs=8192):
 a_full  = feature_acts(sae_full,  scale_full,  "full")    # (N, 16384)
 a_resid = feature_acts(sae_resid, scale_resid, "resid")
 
-def trivial_fraction(a, tok):
+def triviality(a, tok):
+    """Per-feature modal-token fraction + the alive mask (fired >= TOPK times)."""
     vals, idx = a.topk(TOPK, dim=0)
     top_tokens = tok.to(idx.device)[idx]
     modal_tok, _ = t.mode(top_tokens, dim=0)
-    modal_frac = (top_tokens == modal_tok).float().mean(dim=0)
-    alive = (a>0).sum(dim=0) >= TOPK
-    trivial = alive & (modal_frac > TRIVIAL_THRESH)
-    return (trivial.sum()/alive.sum()).item()
+    modal_frac = (top_tokens == modal_tok).float().mean(dim=0)   # (16384,)
+    alive = (a > 0).sum(dim=0) >= TOPK
+    return modal_frac, alive
 
-# item 5: the headline numbers
-print("full  trivial fraction:", trivial_fraction(a_full,  tok))
-print("resid trivial fraction:", trivial_fraction(a_resid, tok))
+def report(name, a, tok):
+    modal_frac, alive = triviality(a, tok)
+    mf = modal_frac[alive]                    # distribution over ALIVE features only
+    print(f"\n=== {name} ===")
+    print(f"alive features: {int(alive.sum())} / {alive.numel()}")
+    print(f"modal_frac  mean {mf.mean().item():.4f} | median {mf.median().item():.4f}")
+    # threshold sweep: does a gap appear at any cutoff?
+    for thr in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+        print(f"  frac trivial @ {thr:.1f}: {(mf > thr).float().mean().item():.4f}")
+    return modal_frac, alive
+
+mf_full,  al_full  = report("FULL",  a_full,  tok)
+mf_resid, al_resid = report("RESID", a_resid, tok)
+
+# side-by-side shift in the distribution (over each SAE's own alive features)
+print("\n=== shift (resid - full) ===")
+print(f"mean modal_frac:   full {mf_full[al_full].mean().item():.4f}  "
+      f"resid {mf_resid[al_resid].mean().item():.4f}")
+print(f"median modal_frac: full {mf_full[al_full].median().item():.4f}  "
+      f"resid {mf_resid[al_resid].median().item():.4f}")
