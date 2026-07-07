@@ -21,7 +21,7 @@ MODEL_NAME  = "google/gemma-2-2b"
 N_TOKENS    = 1_000_000     # tokens to scan for top activations (small -> fast)
 TOPK        = 20          # top activating examples to show
 WINDOW      = 8           # context tokens on each side
-SHOW_LOGITS = True        # load the model's unembedding for logit effects (~5 GB, ~30 s)
+SHOW_LOGITS = False        # load the model's unembedding for logit effects (~5 GB, ~30 s)
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
@@ -103,14 +103,17 @@ def dashboard(sae, scale, mode, feat_ids, n_tokens=N_TOKENS, bs=8192):
             focus = tokenizer.decode([toks[p].item()])
             print(f"    [{v:6.1f}] ...{ctx}...  <<{focus!r}>>")
 
-def find_word_feature(sae, scale, mode, words, n_tokens=500_000, topn=3, bs=8192):
-    """Find the feature(s) that fire most on a given word — how you locate the SAME
-    concept across SAEs, since feature indices don't correspond between dictionaries."""
+def find_word_feature(sae, scale, mode, words, n_tokens=500_000, topn=3, max_rate=0.10, bs=8192):
+    """Find the feature(s) that fire most on a given word (locates the same concept across
+    SAEs). Excludes always-on/dense features (firing rate > max_rate) that fire on everything
+    and would otherwise dominate the ranking."""
     target = set()
     for w in words:                                   # collect token ids for the surface forms
         target.update(tokenizer(w, add_special_tokens=False).input_ids)
     target = t.tensor(sorted(target), device=device)
-    acc = t.zeros(sae.cfg.d_sae, device=device); cnt = 0; seen = 0
+    acc = t.zeros(sae.cfg.d_sae, device=device)       # sum activation on target-word positions
+    fire = t.zeros(sae.cfg.d_sae, device=device)      # total firings per feature (for rate)
+    cnt = 0; seen = 0
     with t.no_grad():
         for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
             tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
@@ -120,37 +123,116 @@ def find_word_feature(sae, scale, mode, words, n_tokens=500_000, topn=3, bs=8192
                 tt = tc[start:start+bs].to(device)
                 x = (hh - P[tt]) if mode == "resid" else hh
                 a = sae.encode(x / scale)              # (b, F)
+                fire += (a > 0).sum(0)
                 m = t.isin(tt, target)                 # positions sitting on the target word
                 if m.any():
                     acc += a[m].sum(0); cnt += int(m.sum())
                 seen += hh.shape[0]
                 if seen >= n_tokens: break
             if seen >= n_tokens: break
-    top = (acc / max(1, cnt)).topk(topn)               # features with highest mean activation on the word
+    mean_act = acc / max(1, cnt)
+    mean_act[(fire / max(1, seen)) > max_rate] = -1e9  # drop always-on features
+    top = mean_act.topk(topn)
     print(f"[{mode}] features most active on {words} ({cnt} occurrences): "
           f"{[(i, round(v, 2)) for i, v in zip(top.indices.tolist(), top.values.tolist())]}")
     return top.indices.tolist()
 
 # ------------------------------------------------------------------
-# pick which features to view
-SAE, SCALE, MODE, STATS = sae_resid, scale_resid, "resid", f"{CACHE_DIR}/stats_resid.pt"
+# Individual-feature dashboards (uncomment to eyeball specific features):
+# s = t.load(f"{CACHE_DIR}/stats_resid.pt")
+# band = s["alive"] & (s["freq"] >= 100) & (s["freq"] < 1000) & (s["nd"] == 1)
+# dashboard(sae_resid, scale_resid, "resid", band.nonzero().squeeze(1)[:8].tolist())
+# dashboard(sae_full, scale_full, "full", find_word_feature(sae_full, scale_full, "full", [" district", " District"]))
+# dashboard(sae_full, scale_full, "full", find_word_feature(sae_full, scale_full, "full", [" health"]))
 
-FEAT_IDS = [3]   # fallback: hardcode ids you're curious about
-try:
-    s = t.load(STATS)   # saved by eval_trivial.py
-    # single-word features in the anomalous 100-1000 firing band:
-    band = s["alive"] & (s["freq"] >= 100) & (s["freq"] < 1000) & (s["nd"] == 1)
-    FEAT_IDS = band.nonzero().squeeze(1)[:8].tolist()
-    print(f"selected {len(FEAT_IDS)} single-word {MODE} features (100-1000 band)")
-except FileNotFoundError:
-    print(f"no {STATS}; using hardcoded FEAT_IDS={FEAT_IDS}")
+# ================= matched-pairs study =================
+# Question: do the FULL SAE's single-token features stay single-token in the RESID SAE?
+# For n single-token full features: find each feature's top token -> find the RESID feature
+# that detects that same token -> classify it (single-token / multi-word / absent).
 
-dashboard(SAE, SCALE, MODE, FEAT_IDS)
+def _norm_map():
+    """token id -> normalized-word id (collapses case/space variants)."""
+    raw = tokenizer.convert_ids_to_tokens(list(range(P.shape[0])))
+    d, rows = {}, []
+    for s in raw:
+        rows.append(d.setdefault(s.replace("▁", "").strip().lower(), len(d)))
+    return t.tensor(rows, device=device)
 
-# --- find + dashboard the FULL SAE's "district" and "health" features ---
-# (locate them by the word they fire on, since indices differ from the resid SAE)
-district_full = find_word_feature(sae_full, scale_full, "full", [" district", " District"])
-dashboard(sae_full, scale_full, "full", district_full)
+def top_token_of(sae, scale, mode, feat_ids, n_tokens=500_000, bs=8192):
+    """Token id of each feature's single strongest activation over a sample."""
+    fids = t.tensor(feat_ids, device=device)
+    best_val = t.full((len(feat_ids),), -1e9, device=device)
+    best_tok = t.zeros(len(feat_ids), dtype=t.long, device=device)
+    seen = 0
+    with t.no_grad():
+        for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
+            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
+            hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
+            for start in range(0, hc.shape[0], bs):
+                hh = hc[start:start+bs].float().to(device); tt = tc[start:start+bs].to(device)
+                x = (hh - P[tt]) if mode == "resid" else hh
+                a = sae.encode(x / scale)[:, fids]           # (b, nf)
+                mx, arg = a.max(dim=0)                        # per feature: strongest activation this batch
+                upd = mx > best_val
+                best_val = t.where(upd, mx, best_val)
+                best_tok = t.where(upd, tt[arg], best_tok)   # token id at that position
+                seen += hh.shape[0]
+                if seen >= n_tokens: break
+            if seen >= n_tokens: break
+    return best_tok
 
-health_full = find_word_feature(sae_full, scale_full, "full", [" health"])
-dashboard(sae_full, scale_full, "full", health_full)
+def best_resid_feature_per_word(word_tokid_sets, dense_mask, n_tokens=500_000, bs=8192):
+    """One resid pass: per word (a set of token ids), the non-dense feature with highest mean activation."""
+    W = len(word_tokid_sets); F = sae_resid.cfg.d_sae
+    acc = t.zeros(W, F, device=device); cnt = t.zeros(W, device=device)
+    tgts = [t.tensor(sorted(s), device=device) for s in word_tokid_sets]
+    seen = 0
+    with t.no_grad():
+        for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
+            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
+            hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
+            for start in range(0, hc.shape[0], bs):
+                hh = hc[start:start+bs].float().to(device); tt = tc[start:start+bs].to(device)
+                a = sae_resid.encode((hh - P[tt]) / scale_resid)   # resid input
+                for wi, tg in enumerate(tgts):
+                    m = t.isin(tt, tg)
+                    if m.any():
+                        acc[wi] += a[m].sum(0); cnt[wi] += int(m.sum())
+                seen += hh.shape[0]
+                if seen >= n_tokens: break
+            if seen >= n_tokens: break
+    out = []
+    for wi in range(W):
+        mean_act = acc[wi] / max(1, cnt[wi].item())
+        mean_act[dense_mask] = -1e9                          # exclude always-on features
+        out.append((int(mean_act.argmax()), float(mean_act.max()), int(cnt[wi].item())))
+    return out
+
+def matched_pairs(n=25):
+    sf = t.load(f"{CACHE_DIR}/stats_full.pt"); sr = t.load(f"{CACHE_DIR}/stats_resid.pt")
+    nm = _norm_map()
+    # sample n single-token, alive FULL features (spread across the index range)
+    cand = (sf["alive"] & (sf["nd"] == 1)).nonzero().squeeze(1)
+    full_feats = cand[t.linspace(0, len(cand) - 1, min(n, len(cand))).long()].tolist()
+    # each full feature's top token -> normalized word -> all token-id variants of that word
+    toks = top_token_of(sae_full, scale_full, "full", full_feats).tolist()
+    words = [tokenizer.decode([tk]).strip().lower() for tk in toks]
+    word_ids = [set((nm == nm[tk].item()).nonzero().squeeze(1).tolist()) for tk in toks]
+    # resid always-on features to exclude (rate = freq / approx-#tokens, avg L0 = 64)
+    freq = sr["freq"].to(device).float()
+    dense = (freq / (freq.sum() / 64.0)) > 0.10
+    # find the resid counterpart for each word, then classify
+    res = best_resid_feature_per_word(word_ids, dense)
+    nd_resid = sr["nd"].to(device)
+    counts = {"single-token": 0, "multi-word": 0, "absent": 0}
+    print(f"\n=== matched pairs: {len(full_feats)} single-token FULL features -> RESID counterpart ===")
+    for ff, w, (rf, ract, occ) in zip(full_feats, words, res):
+        if occ < 20 or ract < 1.0:                           # resid has no real detector for this word
+            cls, rnd = "absent", -1
+        else:
+            rnd = int(nd_resid[rf]); cls = "single-token" if rnd == 1 else "multi-word"
+        counts[cls] += 1
+        print(f"  {w!r:18} full#{ff:<6} -> resid#{rf:<6} nd={rnd:>2}  {cls}")
+    print(f"\nsummary: {counts}")
+
+matched_pairs(n=25)
