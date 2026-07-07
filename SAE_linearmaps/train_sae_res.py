@@ -45,8 +45,9 @@ with t.no_grad():
 del model                # free ~5 GB — not needed after P is built
 t.cuda.empty_cache()
 
-chunk_h   = t.cat(t.load(f"{CACHE_DIR}/layer_13_chunk_1.pt"), dim=0).float().to(device)
-chunk_tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0).to(device)
+SANITY_N = 100_000   # subsample for the check/scale — a full 1M-token chunk on GPU OOMs
+chunk_h   = t.cat(t.load(f"{CACHE_DIR}/layer_13_chunk_1.pt"), dim=0)[:SANITY_N].float().to(device)
+chunk_tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0)[:SANITY_N].to(device)
 r = chunk_h - P[chunk_tok]
 explained = 1 - (r**2).mean() / chunk_h.var()
 print(explained.item())   # want ≈ 0.66
