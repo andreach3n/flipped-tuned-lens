@@ -35,13 +35,16 @@ def load_sae(path):
 sae_full,  scale_full  = load_sae(FULL_PATH)
 sae_resid, scale_resid = load_sae(RESID_PATH)
 
-def feature_acts(sae, scale, mode):
+def feature_acts(sae, scale, mode, bs=8192):
+    outs = []
     with t.no_grad():
-        hh = h.float().to(device)                      # cache is CPU + bf16 -> GPU + float32
-        tt = tok.to(device)
-        x = (hh - P[tt]) if mode == "resid" else hh    # same transform as training
-        a = sae.encode(x / scale)   # (N, 16384)
-    return a
+        for start in range(0, h.shape[0], bs):         # encode in batches — BatchTopK makes
+            hh = h[start:start+bs].float().to(device)  # several full-size copies internally
+            tt = tok[start:start+bs].to(device)
+            x = (hh - P[tt]) if mode == "resid" else hh
+            a = sae.encode(x / scale)                  # (bs, 16384)
+            outs.append(a.cpu())                       # accumulate on CPU to free GPU
+    return t.cat(outs, dim=0)                          # (N, 16384) on CPU
 
 # item 4: feature activations for each SAE
 a_full  = feature_acts(sae_full,  scale_full,  "full")    # (N, 16384)
