@@ -103,6 +103,34 @@ def dashboard(sae, scale, mode, feat_ids, n_tokens=N_TOKENS, bs=8192):
             focus = tokenizer.decode([toks[p].item()])
             print(f"    [{v:6.1f}] ...{ctx}...  <<{focus!r}>>")
 
+def find_word_feature(sae, scale, mode, words, n_tokens=500_000, topn=3, bs=8192):
+    """Find the feature(s) that fire most on a given word — how you locate the SAME
+    concept across SAEs, since feature indices don't correspond between dictionaries."""
+    target = set()
+    for w in words:                                   # collect token ids for the surface forms
+        target.update(tokenizer(w, add_special_tokens=False).input_ids)
+    target = t.tensor(sorted(target), device=device)
+    acc = t.zeros(sae.cfg.d_sae, device=device); cnt = 0; seen = 0
+    with t.no_grad():
+        for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
+            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
+            hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
+            for start in range(0, hc.shape[0], bs):
+                hh = hc[start:start+bs].float().to(device)
+                tt = tc[start:start+bs].to(device)
+                x = (hh - P[tt]) if mode == "resid" else hh
+                a = sae.encode(x / scale)              # (b, F)
+                m = t.isin(tt, target)                 # positions sitting on the target word
+                if m.any():
+                    acc += a[m].sum(0); cnt += int(m.sum())
+                seen += hh.shape[0]
+                if seen >= n_tokens: break
+            if seen >= n_tokens: break
+    top = (acc / max(1, cnt)).topk(topn)               # features with highest mean activation on the word
+    print(f"[{mode}] features most active on {words} ({cnt} occurrences): "
+          f"{[(i, round(v, 2)) for i, v in zip(top.indices.tolist(), top.values.tolist())]}")
+    return top.indices.tolist()
+
 # ------------------------------------------------------------------
 # pick which features to view
 SAE, SCALE, MODE, STATS = sae_resid, scale_resid, "resid", f"{CACHE_DIR}/stats_resid.pt"
@@ -118,3 +146,11 @@ except FileNotFoundError:
     print(f"no {STATS}; using hardcoded FEAT_IDS={FEAT_IDS}")
 
 dashboard(SAE, SCALE, MODE, FEAT_IDS)
+
+# --- find + dashboard the FULL SAE's "district" and "health" features ---
+# (locate them by the word they fire on, since indices differ from the resid SAE)
+district_full = find_word_feature(sae_full, scale_full, "full", [" district", " District"])
+dashboard(sae_full, scale_full, "full", district_full)
+
+health_full = find_word_feature(sae_full, scale_full, "full", [" health"])
+dashboard(sae_full, scale_full, "full", health_full)
