@@ -92,14 +92,11 @@ for step, x in enumerate(iter_batches(MODE, scale)):
     n_since_fired += 1
     n_since_fired[fired] = 0 # reset the ones that just fired back to 0
 
-    if step % 10 == 0:
+    if step % 100 == 0:
         fvu = ((out.sae_out - out.sae_in)**2).mean() / out.sae_in.var()
         l0 = (out.feature_acts > 0).float().sum(-1).mean()
         n_dead = int(dead.sum())
         print(f"step {step:6d} | loss {out.loss.item():.3f} | FVU {fvu.item():.3f} | L0 {l0.item():.1f} | dead {n_dead}")
-
-    if step > 100:
-        break
 
     # rolling resume checkpoint (overwrites the same file each time)
     if step % 2000 == 0:
