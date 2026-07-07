@@ -20,7 +20,7 @@ K=64
 LR=4e-4
 CACHE_DIR="/workspace/sae_cache_layer13"
 BATCH = 4096
-MODE = "resid"
+MODE = "full"
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 model = HookedTransformer.from_pretrained_no_processing(MODEL_NAME, dtype=t.bfloat16).to(device)
