@@ -255,5 +255,49 @@ def matched_pairs(src, tgt, n=100, n_tokens=2_000_000, min_occ=50, show_rows=Fal
     print(f"{src.upper()} control (noise floor): {cnt_c}")
     return cnt_t, cnt_c
 
-matched_pairs("full", "resid", n=100)   # do full single-token features broaden in resid?
-matched_pairs("resid", "full", n=100)   # are resid single-token features new, or inherited from full?
+# matched_pairs("full", "resid", n=100)   # (churn study — already run)
+# matched_pairs("resid", "full", n=100)
+
+# ================= per-feature activation-strength bins =================
+# Best practice (per mentor): don't judge triviality from the TOP activations only.
+# Bin each feature's activations by STRENGTH and check triviality PER BIN — a feature can be
+# single-token at its peak but fire on many words at lower activation. bin 0 = strongest.
+def binned_dashboard(sae, scale, mode, feat_ids, n_tokens=2_000_000, n_bins=5, examples=6, bs=8192):
+    nm = _norm_map()
+    fids = t.tensor(feat_ids, device=device)
+    acts_parts, toks_parts, seen = [], [], 0
+    with t.no_grad():
+        for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
+            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
+            hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
+            for start in range(0, hc.shape[0], bs):
+                hh = hc[start:start+bs].float().to(device); tt = tc[start:start+bs].to(device)
+                x = (hh - P[tt]) if mode == "resid" else hh
+                a = sae.encode(x / scale)[:, fids]
+                acts_parts.append(a.cpu()); toks_parts.append(tt.cpu())
+                seen += hh.shape[0]
+                if seen >= n_tokens: break
+            if seen >= n_tokens: break
+    acts = t.cat(acts_parts, dim=0); toks = t.cat(toks_parts, dim=0)
+    for j, f in enumerate(feat_ids):
+        col = acts[:, j]; nz = col > 0
+        vals, tks = col[nz], toks[nz]
+        if vals.numel() < n_bins:
+            print(f"\n### {mode} feature {f}: only {vals.numel()} activations, skipping ###"); continue
+        order = vals.argsort(descending=True)                       # strongest first
+        vals, tks = vals[order], tks[order]
+        words = nm[tks.to(device)].cpu()                            # normalized word id per activation
+        print(f"\n### {mode} feature {f}  ({vals.numel()} activations) ===")
+        for bi, ch in enumerate(t.chunk(t.arange(vals.numel()), n_bins)):   # equal-count strength bins
+            bw = words[ch]
+            mf = (bw == bw.mode().values).float().mean().item()     # modal-word fraction in this bin
+            ndist = bw.unique().numel()                             # distinct words in this bin
+            eg = [tokenizer.decode([tks[ch[k]].item()]) for k in range(min(examples, len(ch)))]
+            print(f"  bin {bi} act[{vals[ch[-1]].item():5.1f}-{vals[ch[0]].item():5.1f}] "
+                  f"n={len(ch):<6} modal {mf:.2f}  distinct {ndist:<4} e.g. {eg}")
+
+# run on a few single-token resid features: do they stay single-token down the bins?
+sr = t.load(f"{CACHE_DIR}/stats_resid.pt")
+st_feats = (sr["alive"] & (sr["nd"] == 1)).nonzero().squeeze(1)
+sel = st_feats[t.linspace(0, len(st_feats) - 1, 6).long()].tolist()
+binned_dashboard(sae_resid, scale_resid, "resid", sel)
