@@ -64,38 +64,45 @@ sae_resid, scale_resid = load_sae(RESID_PATH)
 # a_full  = feature_acts(sae_full,  scale_full,  "full")
 # a_resid = feature_acts(sae_resid, scale_resid, "resid")
 
-# --- NEW: stream over millions of tokens, keeping only a running top-K per feature ---
+# --- stream, keeping per feature TWO samples of its firings (single pass) ---
+#   PEAK: top-K by activation value -> biased to the strongest firings (what we had before)
+#   RANGE: top-K by a RANDOM key among firings -> a uniform sample across the whole activation
+#          range (reservoir sampling). This is the peak-bias fix: triviality is judged on the
+#          feature's typical firings, not just its peak.
 def stream_topk(sae, scale, mode, n_tokens, K=TOPK, bs=bs):
-    F = sae.cfg.d_sae                                        # number of SAE features (16384)
-    # Running state — sized by FEATURES, never by tokens, so memory stays flat:
-    run_vals = t.full((K, F), -1e9, device=device)          # best-K activation values per feature; init very low so any real value wins
-    run_toks = t.zeros((K, F), dtype=t.long, device=device) # the token id behind each of those K values
-    freq = t.zeros(F, dtype=t.long, device=device)          # how many times each feature has fired (for alive + freq bins)
-    seen = 0                                                 # tokens processed so far
+    F = sae.cfg.d_sae
+    peak_vals = t.full((K, F), -1e9, device=device)          # PEAK: best-K activation values
+    peak_toks = t.zeros((K, F), dtype=t.long, device=device)
+    res_keys  = t.full((K, F), -1e9, device=device)          # RANGE: random keys for the reservoir
+    res_toks  = t.zeros((K, F), dtype=t.long, device=device)
+    freq = t.zeros(F, dtype=t.long, device=device)
+    seen = 0
     with t.no_grad():
         for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
-            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")  # matching token-id chunk file
-            hc = t.cat(t.load(lf), dim=0)                   # one chunk of activations, on CPU (bf16)
-            tc = t.cat(t.load(tf), dim=0)                   # its token ids, on CPU
+            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
+            hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
             for start in range(0, hc.shape[0], bs):
-                hh = hc[start:start+bs].float().to(device)  # batch of activations -> GPU, float32
-                tt = tc[start:start+bs].to(device)          # batch of token ids   -> GPU
-                x = (hh - P[tt]) if mode == "resid" else hh # residualize (or not)
-                a = sae.encode(x / scale)                   # (b, F) feature activations
-                freq += (a > 0).sum(dim=0)                  # tally firings per feature this batch
-                # ---- merge this batch into the running top-K ----
-                cat_vals = t.cat([run_vals, a], dim=0)                 # (K+b, F): old best stacked on new values
-                batch_toks = tt.unsqueeze(1).expand(-1, F)             # (b, F): same token id across every feature
-                cat_toks = t.cat([run_toks, batch_toks], dim=0)        # (K+b, F): token ids aligned with cat_vals
-                run_vals, sel = cat_vals.topk(K, dim=0)                # keep top-K values; sel = which rows won (K, F)
-                run_toks = cat_toks.gather(0, sel)                     # carry the matching token ids along
+                hh = hc[start:start+bs].float().to(device)
+                tt = tc[start:start+bs].to(device)
+                x = (hh - P[tt]) if mode == "resid" else hh
+                a = sae.encode(x / scale)                     # (b, F)
+                fired = a > 0
+                freq += fired.sum(dim=0)
+                btok = tt.unsqueeze(1).expand(-1, F)          # (b, F): token id per position, broadcast across features
+                # PEAK: keep top-K by activation value
+                peak_vals, sel = t.cat([peak_vals, a], dim=0).topk(K, dim=0)
+                peak_toks = t.cat([peak_toks, btok], dim=0).gather(0, sel)
+                # RANGE: keep top-K by random key, but only among positions that actually fired
+                keys = t.rand_like(a); keys[~fired] = -1e9
+                res_keys, sel2 = t.cat([res_keys, keys], dim=0).topk(K, dim=0)
+                res_toks = t.cat([res_toks, btok], dim=0).gather(0, sel2)
                 seen += hh.shape[0]
                 if seen >= n_tokens:
-                    return run_toks, freq
-    return run_toks, freq
+                    return peak_toks, res_toks, freq
+    return peak_toks, res_toks, freq
 
-run_toks_full,  freq_full  = stream_topk(sae_full,  scale_full,  "full",  N_TOKENS)
-run_toks_resid, freq_resid = stream_topk(sae_resid, scale_resid, "resid", N_TOKENS)
+peak_full,  res_full,  freq_full  = stream_topk(sae_full,  scale_full,  "full",  N_TOKENS)
+peak_resid, res_resid, freq_resid = stream_topk(sae_resid, scale_resid, "resid", N_TOKENS)
 
 # --- OLD: took the full (N, F) matrix and did its own topk ---
 # def triviality(a, tok):
@@ -121,22 +128,18 @@ def triviality(run_toks, freq):
     alive = freq >= TOPK                                   # fired >= K times, else run_toks is junk-padded
     return modal_frac, n_distinct, alive
 
-def report(name, run_toks, freq):
-    modal_frac, n_distinct, alive = triviality(run_toks, freq)
-    mf = modal_frac[alive]
-    nd = n_distinct[alive].float()                  # distribution over ALIVE features only
+def report(name, peak_toks, res_toks, freq):
     print(f"\n=== {name} ===")
-    print(f"alive features: {int(alive.sum())} / {alive.numel()}")
-    print(f"modal_frac  mean {mf.mean().item():.4f} | median {mf.median().item():.4f}")
-    print(f"n_distinct  mean {nd.mean():.4f} | median {nd.median():.4f}  (of {TOPK}; lower=more trivial)")
-    print(f"frac single-word (n_distinct==1): {(nd == 1).float().mean():.4f}")
-    # threshold sweep: does a gap appear at any cutoff?
-    for thr in [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
-        print(f"  frac trivial @ {thr:.1f}: {(mf > thr).float().mean().item():.4f}")
-    return modal_frac, n_distinct, alive
+    for label, toks in [("PEAK  (top-K by activation)                 ", peak_toks),
+                        ("RANGE (reservoir: uniform sample of firings)", res_toks)]:
+        mf, nd, alive = triviality(toks, freq)
+        mfa, nda = mf[alive], nd[alive].float()
+        print(f"  {label}: alive {int(alive.sum())}  "
+              f"modal {mfa.mean():.3f}  distinct {nda.mean():.2f}  single-word {(nda == 1).float().mean():.3f}")
+    return triviality(res_toks, freq)   # RANGE-aware (peak-bias-corrected) metric used downstream
 
-mf_full,  nd_full,  al_full  = report("FULL",  run_toks_full,  freq_full)
-mf_resid, nd_resid, al_resid = report("RESID", run_toks_resid, freq_resid)
+mf_full,  nd_full,  al_full  = report("FULL",  peak_full,  res_full,  freq_full)
+mf_resid, nd_resid, al_resid = report("RESID", peak_resid, res_resid, freq_resid)
 
 # side-by-side shift in the distribution (over each SAE's own alive features)
 print("\n=== shift (resid - full) ===")
@@ -178,8 +181,9 @@ for (lo, hi), fb, rb in zip(zip(edges[:-1], edges[1:]), full_bins, resid_bins):
           f"{rb[0]:>6} {rb[1]:>5.3f} {rb[2]:>5.2f} {rb[3]:>5.3f}")
 
 # --- save per-feature stats so dashboard.py can pick features without re-running the 4M eval ---
-t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "alive": al_full.cpu()},  f"{CACHE_DIR}/stats_full.pt")
-t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
+# "nd" = RANGE-aware (reservoir) distinct-word count [the corrected metric]; "nd_peak" = old peak metric
+t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "nd_peak": triviality(peak_full, freq_full)[1].cpu(),  "alive": al_full.cpu()},  f"{CACHE_DIR}/stats_full.pt")
+t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "nd_peak": triviality(peak_resid, freq_resid)[1].cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
 print(f"\nsaved per-feature stats to {CACHE_DIR}/stats_*.pt")
 
 # feature inspection / dashboards moved to dashboard.py (run that to eyeball features)
