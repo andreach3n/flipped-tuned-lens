@@ -227,25 +227,33 @@ def _dense(freq):
     f = freq.to(device).float()
     return (f / (f.sum() / 64.0)) > 0.10                     # always-on features (rate > 10%, avg L0 = 64)
 
-def matched_pairs(n=25, n_tokens=2_000_000, min_occ=50):
-    sf = t.load(f"{CACHE_DIR}/stats_full.pt"); sr = t.load(f"{CACHE_DIR}/stats_resid.pt")
+_SAES  = {"full": (sae_full, scale_full), "resid": (sae_resid, scale_resid)}
+_STATS = {"full": f"{CACHE_DIR}/stats_full.pt", "resid": f"{CACHE_DIR}/stats_resid.pt"}
+
+def matched_pairs(src, tgt, n=100, n_tokens=2_000_000, min_occ=50, show_rows=False):
+    """Sample single-token features from `src` SAE, find each's counterpart in `tgt` SAE, and
+    classify (single-token / multi-word / absent). Also matches src->src as a noise floor.
+      full->resid : do full's single-token features broaden in resid? (de-trivialization)
+      resid->full : are resid's single-token features single-token in full? (inherited vs NEW)"""
+    src_sae, src_scale = _SAES[src]; tgt_sae, tgt_scale = _SAES[tgt]
+    ss = t.load(_STATS[src]); ts = t.load(_STATS[tgt])
     nm = _norm_map()
-    # sample n single-token, alive FULL features (spread across the index range)
-    cand = (sf["alive"] & (sf["nd"] == 1)).nonzero().squeeze(1)
-    full_feats = cand[t.linspace(0, len(cand) - 1, min(n, len(cand))).long()].tolist()
-    toks = top_token_of(sae_full, scale_full, "full", full_feats, n_tokens=1_000_000).tolist()
+    cand = (ss["alive"] & (ss["nd"] == 1)).nonzero().squeeze(1)          # single-token SOURCE features
+    src_feats = cand[t.linspace(0, len(cand) - 1, min(n, len(cand))).long()].tolist()
+    toks = top_token_of(src_sae, src_scale, src, src_feats, n_tokens=1_000_000).tolist()
     words = [tokenizer.decode([tk]).strip().lower() for tk in toks]
     word_ids = [set((nm == nm[tk].item()).nonzero().squeeze(1).tolist()) for tk in toks]
-    # resid counterpart AND full->full control (noise floor)
-    res_r = best_feature_per_word(sae_resid, scale_resid, "resid", word_ids, _dense(sr["freq"]), n_tokens)
-    res_f = best_feature_per_word(sae_full,  scale_full,  "full",  word_ids, _dense(sf["freq"]), n_tokens)
-    rows_r, cnt_r = _classify(res_r, sr["nd"].to(device), min_occ)
-    rows_f, cnt_f = _classify(res_f, sf["nd"].to(device), min_occ)
-    print(f"\n=== matched pairs: {len(full_feats)} single-token FULL features (>= {min_occ} occ) ===")
-    print(f"{'word':16} {'full#':>6} | {'resid#':>6} {'nd':>3} {'class':>12} | {'ctrl#':>6} {'nd':>3} {'class':>12}")
-    for ff, w, (rr, rnd, rc), (fr, fnd, fc) in zip(full_feats, words, rows_r, rows_f):
-        print(f"{w!r:16} {ff:>6} | {rr:>6} {rnd:>3} {rc:>12} | {fr:>6} {fnd:>3} {fc:>12}")
-    print(f"\nRESID counterpart: {cnt_r}")
-    print(f"FULL  control:     {cnt_f}   <- noise floor (should be mostly single-token)")
+    res_t = best_feature_per_word(tgt_sae, tgt_scale, tgt, word_ids, _dense(ts["freq"]), n_tokens)  # counterpart
+    res_c = best_feature_per_word(src_sae, src_scale, src, word_ids, _dense(ss["freq"]), n_tokens)  # src->src control
+    rows_t, cnt_t = _classify(res_t, ts["nd"].to(device), min_occ)
+    rows_c, cnt_c = _classify(res_c, ss["nd"].to(device), min_occ)
+    print(f"\n=== {len(src_feats)} single-token {src.upper()} features -> {tgt.upper()} (>= {min_occ} occ) ===")
+    if show_rows:
+        for sf_, w, (tr, tnd, tc), (cr, cnd, cc) in zip(src_feats, words, rows_t, rows_c):
+            print(f"{w!r:16} {src}#{sf_:<6} | {tgt} {tr:>6} {tnd:>3} {tc:>12} | ctrl {cr:>6} {cnd:>3} {cc:>12}")
+    print(f"{tgt.upper()} counterpart:          {cnt_t}")
+    print(f"{src.upper()} control (noise floor): {cnt_c}")
+    return cnt_t, cnt_c
 
-matched_pairs(n=100)
+matched_pairs("full", "resid", n=100)   # do full single-token features broaden in resid?
+matched_pairs("resid", "full", n=100)   # are resid single-token features new, or inherited from full?
