@@ -1,0 +1,358 @@
+<title>Are residual-SAE features less trivial?</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #f0f2f6;
+    --ink: #1a1f2b;
+    --muted: #59637a;
+    --faint: #8a93a6;
+    --line: #e3e7ee;
+    --accent: #4553c9;
+    --accent-soft: #ebedfa;
+    --good: #2c885f;
+    --warn: #b5762e;
+    --warn-soft: #f7efe1;
+    --null: #6a7386;
+    --bar-track: #e7eaf1;
+    --shadow: 0 1px 2px rgba(20,26,44,.04), 0 6px 22px rgba(20,26,44,.05);
+    --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: "SF Mono", "JetBrains Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #101319;
+      --surface: #171b24;
+      --surface-2: #1d222d;
+      --ink: #e7eaf1;
+      --muted: #9aa4b7;
+      --faint: #6d7688;
+      --line: #29303d;
+      --accent: #8b97f2;
+      --accent-soft: #20263a;
+      --good: #52c093;
+      --warn: #d69a54;
+      --warn-soft: #2b2519;
+      --null: #8791a4;
+      --bar-track: #262d3a;
+      --shadow: 0 1px 2px rgba(0,0,0,.2), 0 8px 26px rgba(0,0,0,.28);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f0f2f6; --ink: #1a1f2b;
+    --muted: #59637a; --faint: #8a93a6; --line: #e3e7ee; --accent: #4553c9;
+    --accent-soft: #ebedfa; --good: #2c885f; --warn: #b5762e; --warn-soft: #f7efe1;
+    --null: #6a7386; --bar-track: #e7eaf1; --shadow: 0 1px 2px rgba(20,26,44,.04), 0 6px 22px rgba(20,26,44,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #101319; --surface: #171b24; --surface-2: #1d222d; --ink: #e7eaf1;
+    --muted: #9aa4b7; --faint: #6d7688; --line: #29303d; --accent: #8b97f2;
+    --accent-soft: #20263a; --good: #52c093; --warn: #d69a54; --warn-soft: #2b2519;
+    --null: #8791a4; --bar-track: #262d3a; --shadow: 0 1px 2px rgba(0,0,0,.2), 0 8px 26px rgba(0,0,0,.28);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 17px; line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+  .col { max-width: 66ch; }
+
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; line-height: 1.18; text-wrap: balance; color: var(--ink); }
+  h1 { font-size: 2.55rem; letter-spacing: -.01em; margin: 0 0 .6rem; }
+  h2 { font-size: 1.62rem; margin: 0 0 .9rem; }
+  h3 { font-size: 1.17rem; margin: 0 0 .4rem; font-family: var(--sans); font-weight: 700; letter-spacing: -.005em; }
+  p { margin: 0 0 1rem; }
+  a { color: var(--accent); }
+  strong { font-weight: 650; }
+  .lede { font-size: 1.2rem; color: var(--muted); line-height: 1.55; margin-bottom: 1.4rem; }
+
+  .eyebrow { font-family: var(--mono); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); margin: 0 0 1rem; }
+  .meta { font-family: var(--mono); font-size: .78rem; color: var(--faint); letter-spacing: .02em; display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: 1.5rem; padding-top: 1.2rem; border-top: 1px solid var(--line); }
+
+  section { margin-top: 3.4rem; }
+  .rule { height: 1px; background: var(--line); border: 0; margin: 0; }
+
+  /* test header with sequence number */
+  .test-head { display: flex; align-items: baseline; gap: .9rem; margin-bottom: 1rem; }
+  .num { font-family: var(--mono); font-size: .85rem; font-weight: 600; color: var(--accent);
+         background: var(--accent-soft); border-radius: 6px; padding: .18rem .5rem; letter-spacing: .02em; white-space: nowrap; }
+  .test-head h2 { margin: 0; }
+
+  .did { color: var(--muted); font-size: .96rem; }
+  .did b { color: var(--ink); font-weight: 650; }
+
+  /* callouts */
+  .call { border: 1px solid var(--line); border-left: 3px solid var(--accent); background: var(--surface);
+          border-radius: 8px; padding: 1rem 1.15rem; margin: 1.2rem 0; box-shadow: var(--shadow); }
+  .call.finding { border-left-color: var(--good); }
+  .call.caveat  { border-left-color: var(--warn); background: var(--warn-soft); }
+  .call .tag { font-family: var(--mono); font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+               color: var(--muted); display: block; margin-bottom: .35rem; }
+  .call.finding .tag { color: var(--good); }
+  .call.caveat  .tag { color: var(--warn); }
+  .call p:last-child { margin-bottom: 0; }
+
+  /* tldr box */
+  .tldr { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 1.6rem 1.7rem;
+          box-shadow: var(--shadow); margin-top: 2rem; }
+  .tldr h3 { color: var(--accent); margin-bottom: .8rem; }
+  .tldr ol { margin: 0; padding-left: 1.2rem; }
+  .tldr li { margin-bottom: .55rem; }
+  .tldr li:last-child { margin-bottom: 0; }
+
+  /* tables */
+  .tbl-wrap { overflow-x: auto; margin: 1.3rem 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; }
+  th, td { text-align: right; padding: .6rem .85rem; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; font-variant-numeric: normal; }
+  thead th { font-family: var(--mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num-mono { font-family: var(--mono); }
+  .hi { color: var(--accent); font-weight: 650; }
+  .cap { font-size: .82rem; color: var(--faint); margin: -.4rem 0 1.5rem; }
+
+  /* mini bar chart */
+  .bars { display: flex; flex-direction: column; gap: .55rem; margin: 1.3rem 0; }
+  .bar-row { display: grid; grid-template-columns: 4.7rem 1fr 3.2rem; align-items: center; gap: .7rem; }
+  .bar-row .lbl { font-family: var(--mono); font-size: .78rem; color: var(--muted); text-align: right; }
+  .bar-track { background: var(--bar-track); border-radius: 5px; height: 1.35rem; overflow: hidden; }
+  .bar-fill { height: 100%; background: var(--accent); border-radius: 5px; }
+  .bar-row .val { font-family: var(--mono); font-size: .8rem; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  /* spectrum highlight */
+  .spectrum { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .8rem; margin: 1.4rem 0; }
+  .spec { border: 1px solid var(--line); border-radius: 10px; padding: 1rem; background: var(--surface); text-align: center; box-shadow: var(--shadow); }
+  .spec .big { font-family: var(--mono); font-size: 1.7rem; font-weight: 600; letter-spacing: -.02em; }
+  .spec .k { font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: .3rem; }
+  .spec .sub { font-size: .78rem; color: var(--faint); margin-top: .25rem; }
+  .spec.mid { border-color: var(--accent); }
+  .spec.mid .big { color: var(--accent); }
+
+  /* feature example card */
+  .feat { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 1.1rem 1.2rem; margin: 1rem 0; box-shadow: var(--shadow); }
+  .feat h4 { margin: 0 0 .5rem; font-family: var(--mono); font-size: .9rem; color: var(--accent); font-weight: 600; }
+  .feat .ex { font-family: var(--mono); font-size: .78rem; color: var(--muted); line-height: 1.7; background: var(--surface-2); border-radius: 6px; padding: .55rem .7rem; margin: .55rem 0; overflow-x: auto; white-space: nowrap; }
+  .feat .ex mark { background: transparent; color: var(--accent); font-weight: 600; }
+  .verdict { font-size: .9rem; }
+  .verdict.trivial b { color: var(--warn); }
+  .verdict.notrivial b { color: var(--good); }
+
+  ul.clean { margin: 1rem 0; padding-left: 1.15rem; }
+  ul.clean li { margin-bottom: .45rem; }
+  .kbd { font-family: var(--mono); font-size: .84em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: .05rem .35rem; }
+  .footnote { font-size: .88rem; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <div class="col">
+    <p class="eyebrow">Interpretability · SAE feature analysis · Gemma-2-2b layer 13</p>
+    <h1>Are residual-SAE features less &ldquo;trivial&rdquo;?</h1>
+    <p class="lede">A two-day investigation into whether training a sparse autoencoder on the <em>residual</em> (activation minus a linear prediction from the token embedding) produces fewer single-token features than a normal SAE — and a methodological trap that made the answer look different depending on where I looked.</p>
+    <div class="meta">
+      <span>Notebook write-up</span>
+      <span>7 tests</span>
+      <span>Verdict: null (with caveats worth reading)</span>
+    </div>
+  </div>
+
+  <div class="tldr col">
+    <h3>Bottom line up front</h3>
+    <ol>
+      <li><strong>Single-token (&ldquo;trivial&rdquo;) features are rare — about 1%, not the ~16% the first metric suggested.</strong> The 16% was a measurement artifact of only looking at each feature&rsquo;s <em>strongest</em> activations.</li>
+      <li><strong>Residualization does not reduce them.</strong> Full and residual SAEs are equal on every metric that isn&rsquo;t peak-biased.</li>
+      <li><strong>Every apparent effect I found along the way</strong> (&ldquo;residual is more trivial,&rdquo; a ~22% feature &ldquo;churn&rdquo;) turned out to be a <em>frequency</em> or <em>peak-sampling</em> artifact that vanished under proper controls.</li>
+      <li>The real deliverable is the <strong>method</strong>: how peak-bias and frequency confounds can manufacture effects that aren&rsquo;t there.</li>
+    </ol>
+  </div>
+
+  <section class="col">
+    <h2>The setup &amp; the hypothesis</h2>
+    <p>I trained two sparse autoencoders (SAEs) on the layer-13 residual stream of Gemma-2-2b. Both are BatchTopK SAEs, 16,384 features, k=64, trained on 50M tokens with identical settings. The <em>only</em> difference is the input:</p>
+    <ul class="clean">
+      <li><strong>Full SAE</strong> — trained on the raw activation <span class="kbd">h</span>.</li>
+      <li><strong>Residual SAE</strong> — trained on <span class="kbd">r = h &minus; P(embedding)</span>, where <span class="kbd">P</span> is a linear map I&rsquo;d trained to predict the layer-13 activation from the token&rsquo;s embedding.</li>
+    </ul>
+    <p>The idea: token identity is the &ldquo;easy,&rdquo; linearly-predictable part of the activation. If I subtract it out, maybe the SAE stops wasting features on <strong>trivial single-token detectors</strong> (features that just fire on one word) and spends them on higher-level concepts instead.</p>
+    <p>The linear map explains a good chunk of the activation — here&rsquo;s how much variance it captures per layer (I used layer 13):</p>
+    <div class="bars">
+      <div class="bar-row"><span class="lbl">layer 1</span><div class="bar-track"><div class="bar-fill" style="width:85%"></div></div><span class="val">0.85</span></div>
+      <div class="bar-row"><span class="lbl">layer 5</span><div class="bar-track"><div class="bar-fill" style="width:66%"></div></div><span class="val">0.66</span></div>
+      <div class="bar-row"><span class="lbl">layer 9</span><div class="bar-track"><div class="bar-fill" style="width:68%"></div></div><span class="val">0.68</span></div>
+      <div class="bar-row"><span class="lbl">layer 13</span><div class="bar-track"><div class="bar-fill" style="width:66%;background:var(--good)"></div></div><span class="val">0.66</span></div>
+      <div class="bar-row"><span class="lbl">layer 17</span><div class="bar-track"><div class="bar-fill" style="width:64%"></div></div><span class="val">0.64</span></div>
+      <div class="bar-row"><span class="lbl">layer 21</span><div class="bar-track"><div class="bar-fill" style="width:55%"></div></div><span class="val">0.55</span></div>
+      <div class="bar-row"><span class="lbl">layer 25</span><div class="bar-track"><div class="bar-fill" style="width:44%"></div></div><span class="val">0.44</span></div>
+    </div>
+    <p class="cap">Test R² of the linear map (embedding → activation), by layer. Layer 13 (highlighted) sits in a sweet spot: enough token signal to remove, enough context left to matter.</p>
+    <p class="footnote">Both SAEs reconstruct the true activation about equally well (the residual SAE&rsquo;s error on <span class="kbd">r</span>, scaled back, matches the full SAE&rsquo;s error on <span class="kbd">h</span> at ~0.14 FVU), so any difference between them isn&rsquo;t just one fitting better than the other.</p>
+  </section>
+
+  <section class="col">
+    <h2>How I measure &ldquo;trivial&rdquo;</h2>
+    <p>A feature is <strong>trivial</strong> if it just fires on a single token — it&rsquo;s interpretable, but it&rsquo;s only re-detecting a word the embedding already told the model about. To measure it, for each feature I take its top activating examples and compute two things over the words they fire on:</p>
+    <ul class="clean">
+      <li><strong>modal fraction</strong> — what fraction are the <em>same</em> word (high = single-token).</li>
+      <li><strong>distinct words</strong> — how many different words (low = single-token).</li>
+    </ul>
+    <p>Words are normalized first, so <span class="kbd">Happy</span> / <span class="kbd">happy</span> / <span class="kbd">&nbsp;happy</span> count as one. This whole write-up is really the story of getting this one measurement right.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section class="col">
+    <div class="test-head"><span class="num">TEST 1</span><h2>First pass — basic comparison</h2></div>
+    <p class="did"><b>Did:</b> Computed the trivial-feature fraction for both SAEs on 100k tokens.</p>
+    <p class="did"><b>Found:</b> Basically identical — 2.7% vs 2.7%. Looked like a flat null.</p>
+    <div class="call caveat">
+      <span class="tag">Problem, flagged by mentor</span>
+      <p>100k tokens is far too small. A typical SAE feature fires on roughly 1 in 10,000&ndash;1,000,000 tokens, so at 100k I was only measuring the <em>most frequent</em> features and missing most of the dictionary. (Neuronpedia&rsquo;s dashboards use ~4M tokens.)</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="test-head"><span class="num">TEST 2</span><h2>Better metric, much more data</h2></div>
+    <p class="did"><b>Did:</b> Cleaned up the metric (top-20 examples, string normalization, added the distinct-words measure) and scaled to <strong>4M tokens</strong> using a streaming method, so ~99.8% of features got measured.</p>
+    <p class="did"><b>Found:</b> Still no clear difference in the distributions. If anything, the residual looked <em>slightly more</em> trivial in aggregate — 18% vs 16% pure single-word features — the opposite of the hypothesis.</p>
+  </section>
+
+  <section class="col">
+    <div class="test-head"><span class="num">TEST 3</span><h2>Controlling for firing frequency</h2></div>
+    <p class="did"><b>Did:</b> Grouped features into firing-frequency bins and compared the two SAEs <em>within each bin</em> — because rare features are naturally more trivial, and the two SAEs might have different mixes of rare vs common features.</p>
+    <p class="did"><b>Found:</b> The &ldquo;residual is more trivial&rdquo; from Test 2 was a <strong>mirage</strong>. It came entirely from the residual SAE having <em>more rare features</em> (which are intrinsically more trivial), not from its features being more trivial at any given frequency.</p>
+    <div class="call finding">
+      <span class="tag">Finding</span>
+      <p>At <em>matched</em> frequency, there is no real difference — the residual is even slightly <em>less</em> trivial in most bins. The naive aggregate comparison was misleading; once controlled, it&rsquo;s a clean null. <strong>Lesson: frequency is a confound that can flip the sign of the result.</strong></p>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="test-head"><span class="num">TEST 4</span><h2>Actually looking at the features</h2></div>
+    <p class="did"><b>Did:</b> Built a text &ldquo;dashboard&rdquo; (like a homemade Neuronpedia) showing, per feature: how often it fires, an activation histogram, which tokens it predicts, and its top examples with context. Then inspected specific features in both SAEs.</p>
+
+    <div class="feat">
+      <h4>&ldquo;district&rdquo; feature</h4>
+      <div class="ex">…U.S. <mark>District</mark> Court · Los Angeles County <mark>District</mark> Attorney · <mark>District</mark> of Columbia · a financial <mark>district</mark> · Amritsar <mark>district</mark></div>
+      <p class="verdict trivial">Fires on &ldquo;district&rdquo; across totally different meanings (legal, governmental, geographic). It doesn&rsquo;t care about meaning, just the word. <b>Genuinely trivial</b> — a pure token detector. The metric got this one right.</p>
+    </div>
+
+    <div class="feat">
+      <h4>&ldquo;health&rdquo; feature</h4>
+      <div class="ex">…single-payer <mark>health</mark> care · lost their <mark>health</mark> insurance · universal <mark>health</mark> care · <mark>health</mark> coverage through Medicaid</div>
+      <p class="verdict notrivial">Fires on &ldquo;health&rdquo; but specifically in <em>healthcare-policy</em> contexts, and it <strong>predicts the token &ldquo;insurance.&rdquo;</strong> So it&rsquo;s a genuinely <b>meaningful feature</b> — yet the metric flags it as trivial because its top examples are all one word.</p>
+    </div>
+
+    <div class="call finding">
+      <span class="tag">Finding</span>
+      <p><strong>&ldquo;Single-token&rdquo; ≠ &ldquo;useless.&rdquo;</strong> The metric flags token-bound features, but some of them are real, useful concepts. Also: both SAEs have the same district and health detectors — so residualization didn&rsquo;t delete these concepts.</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="test-head"><span class="num">TEST 5</span><h2>Matching features across the two SAEs</h2></div>
+    <p class="did"><b>Did:</b> The systematic version of Test 4. For 100 single-token features in one SAE, find the word each fires on, then find the feature that fires most on that word in the <em>other</em> SAE, and check if it&rsquo;s still single-token or has broadened. Did both directions, plus a <strong>control matching each SAE against itself</strong> to measure how much apparent &ldquo;change&rdquo; is just noise.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>direction</th><th>became multi-word</th><th>self-control (noise floor)</th><th>real effect</th></tr></thead>
+        <tbody>
+          <tr><td>full → residual</td><td class="num-mono">30%</td><td class="num-mono">8%</td><td class="num-mono hi">~22%</td></tr>
+          <tr><td>residual → full</td><td class="num-mono">18%</td><td class="num-mono">6%</td><td class="num-mono hi">~12%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap">Subtracting the self-control noise floor: ~22% of the full SAE&rsquo;s single-token features broaden in the residual, and ~12% of the residual&rsquo;s are &ldquo;new.&rdquo;</p>
+    <p>This looked like a real result: <strong>feature churn</strong> — the count of single-token features stays flat, but <em>which</em> concepts have them turns over by 12&ndash;22%. I was ready to write this up… and then Test 6 undercut it.</p>
+    <div class="call caveat">
+      <span class="tag">The catch — this used the &ldquo;peak&rdquo; metric</span>
+      <p>This whole analysis judged triviality from each feature&rsquo;s <em>strongest</em> ~20 activations. Test 6 shows that&rsquo;s exactly the wrong place to look.</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="test-head"><span class="num">TEST 6</span><h2>Looking across activation strength — the trap</h2></div>
+    <p class="did"><b>Did:</b> Instead of only the top activations, binned each feature&rsquo;s activations by <em>strength</em> (strongest fifth, next fifth, …) and checked triviality in each bin. A feature might be single-token at its peak but fire on many words when it&rsquo;s activating weakly.</p>
+    <p><b>Found:</b> exactly that. Two examples, both labeled &ldquo;single-token&rdquo; by the top-20 metric:</p>
+
+    <div class="feat">
+      <h4>feature that <em>is</em> robustly single-token</h4>
+      <div class="ex">bin 0 (strongest): <mark>order</mark> ×20 · bin 1: <mark>order</mark> ×20 · bin 2: <mark>order</mark> · bin 3: <mark>order</mark> · bin 4 (weakest): mostly order</div>
+      <p class="verdict trivial">&ldquo;order&rdquo; all the way down. A <b>real</b> token detector.</p>
+    </div>
+
+    <div class="feat">
+      <h4>feature that only <em>looks</em> single-token at the peak</h4>
+      <div class="ex">bin 0: <mark>news</mark> (but already 84 distinct words) · lower bins: rumors, False, Lied, Myths, edited, promoted, press…</div>
+      <p class="verdict notrivial">Its top-20 are all &ldquo;news,&rdquo; so the metric said single-token. But it&rsquo;s really a <b>misinformation / news-credibility concept feature</b> — broad and meaningful. The peak hid it.</p>
+    </div>
+    <p>Another one fired on &ldquo;subscribing / signing / up / for&rdquo; across bins — a <strong>&ldquo;sign up / subscribe&rdquo; concept feature</strong>, again mislabeled single-token from its peak.</p>
+    <div class="call caveat">
+      <span class="tag">The trap</span>
+      <p>The top-20 metric is <strong>peak-biased</strong>: it labels a feature by its strongest activations, where almost everything looks token-specific. Several &ldquo;trivial&rdquo; features are actually the <em>higher-level</em> features I was hoping to find.</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <div class="test-head"><span class="num">TEST 7</span><h2>Fixing the metric — peak vs range vs weighted</h2></div>
+    <p class="did"><b>Did:</b> Measured triviality three ways over 4M tokens: on the <strong>peak</strong> (strongest firings), on a <strong>uniform</strong> sample of all firings, and on an <strong>activation-weighted</strong> sample (firings counted in proportion to how strongly the feature fired — the principled middle).</p>
+
+    <h3 style="margin-top:1.6rem">The headline: single-token fraction depends almost entirely on where you look</h3>
+    <div class="spectrum">
+      <div class="spec"><div class="k">Peak</div><div class="big">~16%</div><div class="sub">strongest firings only</div></div>
+      <div class="spec mid"><div class="k">Weighted</div><div class="big">~1%</div><div class="sub">activation-weighted</div></div>
+      <div class="spec"><div class="k">Uniform</div><div class="big">0.3%</div><div class="sub">all firings equally</div></div>
+    </div>
+    <p class="cap">Fraction of features that are pure single-word, same features, measured three ways. An ~80× swing.</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>metric</th><th>single-word (full)</th><th>single-word (resid)</th><th>effective #words (full)</th><th>eff #words (resid)</th></tr></thead>
+        <tbody>
+          <tr><td>Peak (strongest)</td><td class="num-mono">15.7%</td><td class="num-mono">17.9%</td><td class="num-mono">8.1</td><td class="num-mono">8.1</td></tr>
+          <tr><td>Weighted <span class="footnote">(principled)</span></td><td class="num-mono hi">0.9%</td><td class="num-mono hi">1.5%</td><td class="num-mono hi">13.2</td><td class="num-mono hi">12.8</td></tr>
+          <tr><td>Uniform</td><td class="num-mono">0.3%</td><td class="num-mono">0.2%</td><td class="num-mono">14.5</td><td class="num-mono">14.1</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap">&ldquo;Effective #words&rdquo; = exp(entropy) of the word distribution — how many words the feature effectively responds to (1 = pure single-word). Out of 20.</p>
+
+    <div class="call finding">
+      <span class="tag">Finding</span>
+      <p>Even the activation-<em>weighted</em> metric lands near the broad end (≈13 effective words, ~1% single-word), <strong>not</strong> halfway. So single-token-ness lives <em>only</em> at the razor-thin activation peak; the moment you weight in any of a feature&rsquo;s typical firing, it looks broad. <strong>The ~16% was a peak artifact.</strong></p>
+    </div>
+    <p>And on the corrected metric, <strong>full vs residual is null</strong> — both ~1% single-word, ~13 effective words. The ~22% churn from Test 5 was a peak-behavior effect that disappears once you stop looking only at peaks. Within frequency bins it&rsquo;s mixed and tiny.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section class="col">
+    <h2>What I actually learned</h2>
+    <ol class="clean" style="padding-left:1.3rem">
+      <li style="margin-bottom:.7rem"><strong>Trivial single-token features are rare (~1%), not ~16%.</strong> The high number was a peak-sampling bias — features are token-specific at their strongest activation but broad in typical firing.</li>
+      <li style="margin-bottom:.7rem"><strong>Residualization doesn&rsquo;t reduce triviality.</strong> Null on every metric that isn&rsquo;t peak-biased, and null within frequency bins.</li>
+      <li style="margin-bottom:.7rem"><strong>Every &ldquo;effect&rdquo; I found was an artifact.</strong> The aggregate &ldquo;residual is more trivial&rdquo; was a frequency-composition artifact (Test 3); the 22% churn was a peak-sampling artifact (Tests 6–7).</li>
+      <li><strong>&ldquo;Single-token&rdquo; is not &ldquo;useless.&rdquo;</strong> Some token-bound features (health→insurance, the misinformation feature) are genuinely meaningful, so the framing of &ldquo;trivial features are bad&rdquo; needs rethinking anyway.</li>
+    </ol>
+
+    <div class="call">
+      <span class="tag">The methodological takeaway</span>
+      <p>Two confounds — <strong>firing frequency</strong> and <strong>peak-sampling</strong> — each independently manufactured an apparent effect that vanished under the right control (matched-frequency bins; activation-weighted measurement). The negative result is only trustworthy <em>because</em> those controls are in place.</p>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>Open questions &amp; where I&rsquo;d go next</h2>
+    <ul class="clean">
+      <li><strong>Is &ldquo;fewer single-token features&rdquo; even the right goal?</strong> The health/insurance and misinformation features suggest token-bound ≠ low-value.</li>
+      <li><strong>Try an earlier layer</strong> (e.g. layer 1, R²≈0.85), where residualization removes far more of the token signal — if any effect exists, it should be strongest there.</li>
+      <li><strong>A non-linear map</strong> instead of a linear one, so more token identity is removed from the residual (token identity clearly survives the linear subtraction — the residual SAE still learns a &ldquo;district&rdquo; detector).</li>
+    </ul>
+    <div class="meta">
+      <span>Gemma-2-2b · L13 residual</span>
+      <span>2 SAEs · 16k feats · k=64 · 50M tok</span>
+      <span>eval on 4M tokens</span>
+    </div>
+  </section>
+</div>

@@ -205,4 +205,81 @@ t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "nd_peak": triviality(pe
 t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "nd_peak": triviality(peak_resid, freq_resid)[1].cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
 print(f"\nsaved per-feature stats to {CACHE_DIR}/stats_*.pt")
 
+# --- distribution plot: is "single-word fraction" just a thresholding artifact? -------------
+# The headline metric collapses each feature's top-K to a BINARY (n_distinct == 1 -> "single word").
+# That hides the shape. Here we plot the FULL distribution of unique-token counts so we can see
+# whether "single-token" is a real spike at 1 or just the left tail of a smooth ramp (in which
+# case the single-word fraction moves a lot as you nudge the cutoff). Three panels per freq bin:
+#   col 0: histogram of  # unique normalized words in the top-K        (integer, 1..K)
+#   col 1: fraction of features with (# unique <= t) as t sweeps 1..K  -- the threshold sweep
+#   col 2: histogram of  effective # words = exp(entropy)              (continuous, 1..K)
+# Rows = firing-frequency bins, so full vs resid are compared at MATCHED frequency (the confound
+# your mentor liked controlling for). Overlaid: full (blue) vs resid (orange).
+import matplotlib
+matplotlib.use("Agg")                       # headless box -> render to file, no display
+import matplotlib.pyplot as plt
+import numpy as np
+
+C_FULL, C_RESID = "#4553c9", "#b5762e"
+PLOT_BINS = [((TOPK, 1000),        "rare  (20-1k)"),
+             ((1000, 100000),      "mid   (1k-100k)"),
+             ((100000, float("inf")), "common (>100k)")]
+
+def _unique_and_eff(toks, freq):
+    """Per feature: # unique normalized words (int) and effective # words = exp(entropy)."""
+    nd = triviality(toks, freq)[1].float()   # reuse the distinct-word count
+    ew = eff_words(toks)                      # exp(entropy) of the word distribution
+    return nd, ew
+
+def plot_unique_token_dists(sample_name, toks_full, toks_resid, tag):
+    ndf, ewf = _unique_and_eff(toks_full,  freq_full)
+    ndr, ewr = _unique_and_eff(toks_resid, freq_resid)
+    ubins = np.arange(0.5, TOPK + 1.5, 1)    # integer-centered bins 1..K for the unique-count hist
+    ebins = np.linspace(1, TOPK, 30)         # continuous bins for effective-#words
+    ts    = np.arange(1, TOPK + 1)           # thresholds for the sweep (# unique <= t)
+    nrows = len(PLOT_BINS)
+    fig, axes = plt.subplots(nrows, 3, figsize=(15, 3.4 * nrows), squeeze=False)
+    for r, ((lo, hi), lab) in enumerate(PLOT_BINS):
+        mF = (al_full  & (freq_full  >= lo) & (freq_full  < hi))   # alive full  features in this band
+        mR = (al_resid & (freq_resid >= lo) & (freq_resid < hi))   # alive resid features in this band
+        nF, nR = int(mF.sum()), int(mR.sum())
+        ndF, ndR = ndf[mF].cpu().numpy(), ndr[mR].cpu().numpy()
+        ewF, ewR = ewf[mF].cpu().numpy(), ewr[mR].cpu().numpy()
+
+        # col 0: distribution of # unique tokens
+        ax = axes[r][0]
+        ax.hist(ndF, bins=ubins, density=True, alpha=.55, color=C_FULL,  label=f"full  (n={nF})")
+        ax.hist(ndR, bins=ubins, density=True, alpha=.55, color=C_RESID, label=f"resid (n={nR})")
+        ax.set_xlabel(f"# unique words in top-{TOPK}"); ax.set_ylabel("density")
+        ax.set_title(f"{lab}  ·  unique-token count"); ax.legend(fontsize=8)
+
+        # col 1: threshold sweep -- frac of features called "single-ish" if cutoff is (# unique <= t)
+        ax = axes[r][1]
+        cF = [ (ndF <= t).mean() for t in ts ]
+        cR = [ (ndR <= t).mean() for t in ts ]
+        ax.plot(ts, cF, "-o", ms=3, color=C_FULL,  label="full")
+        ax.plot(ts, cR, "-o", ms=3, color=C_RESID, label="resid")
+        ax.axvline(1, color="#999", lw=.8, ls="--")     # t=1 == the pure single-word fraction
+        ax.set_xlabel("threshold t  (# unique words <= t)"); ax.set_ylabel("frac of features")
+        ax.set_title(f"{lab}  ·  threshold sensitivity"); ax.legend(fontsize=8)
+
+        # col 2: distribution of effective # words (entropy-based, continuous)
+        ax = axes[r][2]
+        ax.hist(ewF, bins=ebins, density=True, alpha=.55, color=C_FULL,  label="full")
+        ax.hist(ewR, bins=ebins, density=True, alpha=.55, color=C_RESID, label="resid")
+        ax.set_xlabel("effective # words (exp entropy)"); ax.set_ylabel("density")
+        ax.set_title(f"{lab}  ·  effective #words"); ax.legend(fontsize=8)
+
+    fig.suptitle(f"Unique-token distribution in top-{TOPK}  —  {sample_name} sample "
+                 f"(full vs resid, matched frequency)", y=1.002, fontsize=14)
+    fig.tight_layout()
+    out = f"{CACHE_DIR}/unique_tokens_{tag}.png"
+    fig.savefig(out, dpi=130, bbox_inches="tight"); plt.close(fig)
+    print(f"saved plot -> {out}")
+
+# PEAK = the "top-20 activating examples" reading (where the ~16% single-word number lived);
+# WEIGHTED = the principled activation-weighted sample. Emit both so the contrast is visible.
+plot_unique_token_dists("PEAK",     peak_full, peak_resid, "peak")
+plot_unique_token_dists("WEIGHTED", wt_full,   wt_resid,   "weighted")
+
 # feature inspection / dashboards moved to dashboard.py (run that to eyeball features)
