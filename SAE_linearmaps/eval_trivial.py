@@ -71,10 +71,12 @@ sae_resid, scale_resid = load_sae(RESID_PATH)
 #          feature's typical firings, not just its peak.
 def stream_topk(sae, scale, mode, n_tokens, K=TOPK, bs=bs):
     F = sae.cfg.d_sae
-    peak_vals = t.full((K, F), -1e9, device=device)          # PEAK: best-K activation values
+    peak_vals = t.full((K, F), -1e9, device=device)          # PEAK: top-K by activation value
     peak_toks = t.zeros((K, F), dtype=t.long, device=device)
-    res_keys  = t.full((K, F), -1e9, device=device)          # RANGE: random keys for the reservoir
-    res_toks  = t.zeros((K, F), dtype=t.long, device=device)
+    uni_keys  = t.full((K, F), -1e9, device=device)          # UNIFORM reservoir: uniform random keys
+    uni_toks  = t.zeros((K, F), dtype=t.long, device=device)
+    wt_keys   = t.full((K, F), -1e9, device=device)          # WEIGHTED reservoir: keys ~ activation
+    wt_toks   = t.zeros((K, F), dtype=t.long, device=device)
     freq = t.zeros(F, dtype=t.long, device=device)
     seen = 0
     with t.no_grad():
@@ -88,21 +90,26 @@ def stream_topk(sae, scale, mode, n_tokens, K=TOPK, bs=bs):
                 a = sae.encode(x / scale)                     # (b, F)
                 fired = a > 0
                 freq += fired.sum(dim=0)
-                btok = tt.unsqueeze(1).expand(-1, F)          # (b, F): token id per position, broadcast across features
-                # PEAK: keep top-K by activation value
-                peak_vals, sel = t.cat([peak_vals, a], dim=0).topk(K, dim=0)
-                peak_toks = t.cat([peak_toks, btok], dim=0).gather(0, sel)
-                # RANGE: keep top-K by random key, but only among positions that actually fired
-                keys = t.rand_like(a); keys[~fired] = -1e9
-                res_keys, sel2 = t.cat([res_keys, keys], dim=0).topk(K, dim=0)
-                res_toks = t.cat([res_toks, btok], dim=0).gather(0, sel2)
+                btok = tt.unsqueeze(1).expand(-1, F)          # (b, F): token id per position
+                # PEAK: top-K by activation value
+                peak_vals, s0 = t.cat([peak_vals, a], dim=0).topk(K, dim=0)
+                peak_toks = t.cat([peak_toks, btok], dim=0).gather(0, s0)
+                # UNIFORM reservoir: top-K by a uniform random key (each firing equally likely)
+                uk = t.rand_like(a); uk[~fired] = -1e9
+                uni_keys, s1 = t.cat([uni_keys, uk], dim=0).topk(K, dim=0)
+                uni_toks = t.cat([uni_toks, btok], dim=0).gather(0, s1)
+                # WEIGHTED reservoir: key = u^(1/a) (A-Res) -> firings sampled in proportion to activation
+                wk = (t.rand_like(a).clamp_min(1e-12).log() / a.clamp_min(1e-6)).exp()
+                wk[~fired] = -1e9
+                wt_keys, s2 = t.cat([wt_keys, wk], dim=0).topk(K, dim=0)
+                wt_toks = t.cat([wt_toks, btok], dim=0).gather(0, s2)
                 seen += hh.shape[0]
                 if seen >= n_tokens:
-                    return peak_toks, res_toks, freq
-    return peak_toks, res_toks, freq
+                    return peak_toks, uni_toks, wt_toks, freq
+    return peak_toks, uni_toks, wt_toks, freq
 
-peak_full,  res_full,  freq_full  = stream_topk(sae_full,  scale_full,  "full",  N_TOKENS)
-peak_resid, res_resid, freq_resid = stream_topk(sae_resid, scale_resid, "resid", N_TOKENS)
+peak_full,  uni_full,  wt_full,  freq_full  = stream_topk(sae_full,  scale_full,  "full",  N_TOKENS)
+peak_resid, uni_resid, wt_resid, freq_resid = stream_topk(sae_resid, scale_resid, "resid", N_TOKENS)
 
 # --- OLD: took the full (N, F) matrix and did its own topk ---
 # def triviality(a, tok):
@@ -128,18 +135,30 @@ def triviality(run_toks, freq):
     alive = freq >= TOPK                                   # fired >= K times, else run_toks is junk-padded
     return modal_frac, n_distinct, alive
 
-def report(name, peak_toks, res_toks, freq):
-    print(f"\n=== {name} ===")
-    for label, toks in [("PEAK  (top-K by activation)                 ", peak_toks),
-                        ("RANGE (reservoir: uniform sample of firings)", res_toks)]:
-        mf, nd, alive = triviality(toks, freq)
-        mfa, nda = mf[alive], nd[alive].float()
-        print(f"  {label}: alive {int(alive.sum())}  "
-              f"modal {mfa.mean():.3f}  distinct {nda.mean():.2f}  single-word {(nda == 1).float().mean():.3f}")
-    return triviality(res_toks, freq)   # RANGE-aware (peak-bias-corrected) metric used downstream
+def eff_words(toks):
+    """Effective # distinct normalized words per feature = exp(entropy of its word distribution)."""
+    words = norm_map[toks]                                    # (K, F)
+    sw, _ = words.sort(dim=0)
+    is_new = t.ones_like(sw, dtype=t.bool); is_new[1:] = sw[1:] != sw[:-1]
+    run_id = is_new.cumsum(0) - 1                             # which run (distinct value) each element belongs to
+    counts = t.zeros_like(sw, dtype=t.float).scatter_add_(0, run_id, t.ones_like(sw, dtype=t.float))
+    p = counts / counts.sum(0, keepdim=True)                 # p(word) over the K samples
+    H = -(p * p.clamp_min(1e-12).log()).sum(0)
+    return H.exp()                                           # (F,) effective # words (1 = single word)
 
-mf_full,  nd_full,  al_full  = report("FULL",  peak_full,  res_full,  freq_full)
-mf_resid, nd_resid, al_resid = report("RESID", peak_resid, res_resid, freq_resid)
+def report(name, peak_toks, uni_toks, wt_toks, freq):
+    print(f"\n=== {name} ===")
+    for label, toks in [("PEAK     (strongest firings only)", peak_toks),
+                        ("UNIFORM  (equal-weight sample)   ", uni_toks),
+                        ("WEIGHTED (activation-weighted)   ", wt_toks)]:
+        mf, nd, alive = triviality(toks, freq)
+        mfa, nda, ewa = mf[alive], nd[alive].float(), eff_words(toks)[alive]
+        print(f"  {label}: modal {mfa.mean():.3f}  distinct {nda.mean():.2f}  "
+              f"eff_words {ewa.mean():.2f}  single-word {(nda == 1).float().mean():.3f}")
+    return triviality(wt_toks, freq)   # WEIGHTED = principled middle, used downstream
+
+mf_full,  nd_full,  al_full  = report("FULL",  peak_full,  uni_full,  wt_full,  freq_full)
+mf_resid, nd_resid, al_resid = report("RESID", peak_resid, uni_resid, wt_resid, freq_resid)
 
 # side-by-side shift in the distribution (over each SAE's own alive features)
 print("\n=== shift (resid - full) ===")
@@ -181,7 +200,7 @@ for (lo, hi), fb, rb in zip(zip(edges[:-1], edges[1:]), full_bins, resid_bins):
           f"{rb[0]:>6} {rb[1]:>5.3f} {rb[2]:>5.2f} {rb[3]:>5.3f}")
 
 # --- save per-feature stats so dashboard.py can pick features without re-running the 4M eval ---
-# "nd" = RANGE-aware (reservoir) distinct-word count [the corrected metric]; "nd_peak" = old peak metric
+# "nd" = WEIGHTED (activation-weighted) distinct-word count [the principled metric]; "nd_peak" = old peak metric
 t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "nd_peak": triviality(peak_full, freq_full)[1].cpu(),  "alive": al_full.cpu()},  f"{CACHE_DIR}/stats_full.pt")
 t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "nd_peak": triviality(peak_resid, freq_resid)[1].cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
 print(f"\nsaved per-feature stats to {CACHE_DIR}/stats_*.pt")
