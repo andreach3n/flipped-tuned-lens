@@ -282,4 +282,54 @@ def plot_unique_token_dists(sample_name, toks_full, toks_resid, tag):
 plot_unique_token_dists("PEAK",     peak_full, peak_resid, "peak")
 plot_unique_token_dists("WEIGHTED", wt_full,   wt_resid,   "weighted")
 
+# --- 2D heatmap: feature frequency (x, log) vs # distinct words in max-20 (y) ----------------
+# The mentor's preferred view: the MAX (peak) metric -- "# different words in the max 20" -- which
+# is what interp dashboards show in practice, plotted against firing frequency with NO arbitrary
+# buckets. Columns are normalized so each frequency slice sums to 1, i.e. we show P(#words | freq).
+# That does two things: (1) exposes the frequency->complexity ridge directly (word-count should
+# climb with frequency -- the confound, made visible), and (2) stops the ~80% mid-frequency bucket
+# from washing everything out. Third panel = resid - full, to see if residualization moves any mass.
+# NOTE: high-frequency columns hold very few features (~150 total in the common bucket), so the
+# right edge of each heatmap is sparse/noisy -- read the left and middle, not the far right.
+def heatmap_freq_vs_words():
+    ndF = triviality(peak_full,  freq_full)[1].float()    # # distinct words in max-20, per feature
+    ndR = triviality(peak_resid, freq_resid)[1].float()
+    fqF, fqR = freq_full.float(), freq_resid.float()
+    fmax = float(max(fqF[al_full].max(), fqR[al_resid].max()))
+    xedges = 10 ** np.arange(np.log10(TOPK), np.log10(fmax) + 0.5, 0.5)   # half-order-of-magnitude bins
+    yedges = np.arange(0.5, TOPK + 1.5, 1)                                # integer word-count bins 1..K
+
+    def col_norm_hist(nd, fq, alive):
+        H, _, _ = np.histogram2d(fq[alive].cpu().numpy(), nd[alive].cpu().numpy(),
+                                 bins=[xedges, yedges])            # (n_freq_bins, K) raw counts
+        col = H.sum(axis=1, keepdims=True)                        # features per frequency column
+        return np.divide(H, col, out=np.zeros_like(H), where=col > 0)   # P(#words | freq)
+
+    Hf = col_norm_hist(ndF, fqF, al_full)
+    Hr = col_norm_hist(ndR, fqR, al_resid)
+    X, Y = np.meshgrid(xedges, yedges)
+    vtop = max(Hf.max(), Hr.max())                                # shared color scale for full & resid
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 5.2))
+    for ax, H, ttl in [(axes[0], Hf, "FULL"), (axes[1], Hr, "RESID")]:
+        pc = ax.pcolormesh(X, Y, H.T, cmap="magma", vmin=0, vmax=vtop)
+        ax.set_xscale("log"); ax.set_title(f"{ttl}   ·   P(#words | freq)")
+        ax.set_xlabel("feature firing frequency (log)"); ax.set_ylabel("# distinct words in max-20")
+        fig.colorbar(pc, ax=ax, fraction=.046)
+    # difference: resid - full. RdBu -> positive (resid heavier) = blue, negative (full heavier) = red.
+    D = (Hr - Hf).T
+    vmax = float(np.abs(D).max()) or 1e-9
+    pc = axes[2].pcolormesh(X, Y, D, cmap="RdBu", vmin=-vmax, vmax=vmax)
+    axes[2].set_xscale("log"); axes[2].set_title("RESID − FULL   (blue = resid more, red = full more)")
+    axes[2].set_xlabel("feature firing frequency (log)"); axes[2].set_ylabel("# distinct words in max-20")
+    fig.colorbar(pc, ax=axes[2], fraction=.046)
+
+    fig.suptitle("Feature frequency vs max-20 word count  (column-normalized: P(#words | freq))", fontsize=14)
+    fig.tight_layout()
+    out = f"{CACHE_DIR}/heatmap_freq_vs_words.png"
+    fig.savefig(out, dpi=130, bbox_inches="tight"); plt.close(fig)
+    print(f"saved plot -> {out}")
+
+heatmap_freq_vs_words()
+
 # feature inspection / dashboards moved to dashboard.py (run that to eyeball features)
