@@ -145,6 +145,15 @@
   ul.clean li { margin-bottom: .45rem; }
   .kbd { font-family: var(--mono); font-size: .84em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: .05rem .35rem; }
   .footnote { font-size: .88rem; color: var(--muted); }
+
+  /* PDF/print only: shrink everything proportionally (rem-based sizes follow :root),
+     tighten margins for the page. On-screen HTML is unaffected. */
+  @media print {
+    :root { font-size: 12px; }              /* scales all rem units: headings, lede, captions… */
+    body  { font-size: 12.5px; line-height: 1.5; }   /* body copy */
+    .wrap { padding: 1.4rem 1.4rem 2rem; }  /* trim the big screen margins for print */
+    h1 { font-size: 2.1rem; }
+  }
 </style>
 
 <div class="wrap">
@@ -154,7 +163,7 @@
     <p class="lede">A two-day investigation into whether training a sparse autoencoder on the <em>residual</em> (activation minus a linear prediction from the token embedding) produces fewer single-token features than a normal SAE — and a methodological trap that made the answer look different depending on where I looked.</p>
     <div class="meta">
       <span>Notebook write-up</span>
-      <span>7 tests</span>
+      <span>8 tests</span>
       <span>Verdict: null (with caveats worth reading)</span>
     </div>
   </div>
@@ -323,6 +332,49 @@
       <p>Even the activation-<em>weighted</em> metric lands near the broad end (≈13 effective words, ~1% single-word), <strong>not</strong> halfway. So single-token-ness lives <em>only</em> at the razor-thin activation peak; the moment you weight in any of a feature&rsquo;s typical firing, it looks broad. <strong>The ~16% was a peak artifact.</strong></p>
     </div>
     <p>And on the corrected metric, <strong>full vs residual is null</strong> — both ~1% single-word, ~13 effective words. The ~22% churn from Test 5 was a peak-behavior effect that disappears once you stop looking only at peaks. Within frequency bins it&rsquo;s mixed and tiny.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section class="col">
+    <div class="test-head"><span class="num">TEST 8</span><h2>Frequency &times; complexity, as one heatmap</h2></div>
+    <p class="did"><b>Did:</b> Took the metric interpretability dashboards actually use — the number of distinct words in a feature&rsquo;s <em>max</em>-20 examples — and plotted it against firing frequency as a 2D heatmap, one panel per SAE. Each <em>column</em> is normalized, so it shows <span class="kbd">P(#words | frequency)</span>: among features that fire this often, how many words do they spread over? A third panel shows residual &minus; full. This folds the frequency control (Test 3) and the residual comparison into a single picture, with no arbitrary buckets.</p>
+
+    <div style="margin:1.4rem 0;">
+      <img src="plots/heatmap_freq_vs_words.png" style="width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);" alt="Heatmap of feature firing frequency (log x-axis) versus number of distinct words in the max-20 examples (y-axis), column-normalized, for the full SAE, the residual SAE, and their difference.">
+    </div>
+    <p class="cap">Left / middle: P(#words | freq) for the full and residual SAEs (brighter = more mass). Right: residual &minus; full (blue = residual has more mass there, red = full does). Firing frequency on a log x-axis, half-order-of-magnitude bins.</p>
+
+    <p class="did"><b>Found:</b> one dominant structure — a diagonal <strong>ridge from bottom-left to top-right</strong>. Rare features (left) are pinned at 1&ndash;2 words; common features (right) spread across ~20. So <strong>a feature&rsquo;s word-count is largely a function of how often it fires</strong>, not of how abstract it is: a feature isn&rsquo;t &ldquo;complex&rdquo; because it encodes a rich concept — much of its word-count is simply &ldquo;it fired enough times to have seen many words.&rdquo;</p>
+
+    <div class="call finding">
+      <span class="tag">Finding</span>
+      <p>This is the frequency confound as a <em>picture</em>: complexity tracks frequency, so any triviality comparison that doesn&rsquo;t hold frequency fixed is mostly re-measuring the frequency mix. And the <strong>difference panel is near-white everywhere</strong> — conditioned on frequency, full and residual have the same word-count distribution at every frequency. The residual null holds. (The faint blue in the rare corner = residual is a hair <em>more</em> single-token among rare features; the lone red cell at the far top-right is the ~2% common tail, too sparse to trust.)</p>
+    </div>
+
+    <h3 style="margin-top:1.6rem">Why the residual ever <em>looked</em> more trivial</h3>
+    <p>If the two SAEs are identical at matched frequency, where did the aggregate &ldquo;residual is more trivial&rdquo; from Test 2 come from? From the <strong>frequency mix itself.</strong> Here is how many alive features each SAE places in each half-order-of-magnitude frequency bin:</p>
+
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>firing frequency</th><th>full</th><th>resid</th></tr></thead>
+        <tbody>
+          <tr><td>20 &ndash; 63</td><td class="num-mono">176</td><td class="num-mono">351</td></tr>
+          <tr><td>63 &ndash; 200</td><td class="num-mono">542</td><td class="num-mono">955</td></tr>
+          <tr><td>200 &ndash; 632</td><td class="num-mono">1,123</td><td class="num-mono">1,793</td></tr>
+          <tr><td>632 &ndash; 2,000</td><td class="num-mono">2,463</td><td class="num-mono">2,206</td></tr>
+          <tr><td>2,000 &ndash; 6,325</td><td class="num-mono">3,408</td><td class="num-mono">2,796</td></tr>
+          <tr><td>6,325 &ndash; 20,000</td><td class="num-mono hi">5,124</td><td class="num-mono hi">4,897</td></tr>
+          <tr><td>20,000 &ndash; 63,246</td><td class="num-mono">3,132</td><td class="num-mono">2,996</td></tr>
+          <tr><td>63,246 &ndash; 200,000</td><td class="num-mono">322</td><td class="num-mono">276</td></tr>
+          <tr><td>&gt; 200,000</td><td class="num-mono">59</td><td class="num-mono">79</td></tr>
+          <tr><td><strong>total alive</strong></td><td class="num-mono">16,349</td><td class="num-mono">16,349</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap">Alive features per half-order-of-magnitude frequency bin. ~80% of each dictionary lives in the 632&ndash;63k range (peak bin: 6.3k&ndash;20k); the common tail (&gt;63k) is only ~2%.</p>
+
+    <p>The tell is the <strong>rare tail</strong>. Below 632 firings the residual holds <strong>3,099 features (19%) vs the full&rsquo;s 1,841 (11%)</strong> — nearly double in the two rarest bins. Rare features are intrinsically single-token (they&rsquo;ve simply seen fewer contexts), so a dictionary carrying more of them looks more trivial <em>on average</em> — even though, feature-for-feature at matched frequency, nothing has changed. That is the whole &ldquo;residual is more trivial&rdquo; effect: a <strong>frequency-composition artifact</strong>, not a complexity difference. (Why the residual&rsquo;s dictionary skews rarer is a separate question these tests don&rsquo;t pin down — plausibly, removing the token-embedding prediction frees the SAE from re-encoding common tokens — but the shift in the <em>mix</em> is real while the change in per-feature triviality is not.)</p>
   </section>
 
   <hr class="rule">
