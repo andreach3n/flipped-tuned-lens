@@ -11,6 +11,7 @@ from transformer_lens import (
 from transformer_lens.hook_points import HookPoint
 from datasets import load_dataset
 import glob
+import os
 
 from transformers import AutoTokenizer
 tokenizer = AutoTokenizer.from_pretrained("google/gemma-2-2b")
@@ -18,7 +19,9 @@ tokenizer = AutoTokenizer.from_pretrained("google/gemma-2-2b")
 CACHE_DIR   = "/workspace/sae_cache_layer13"
 FULL_PATH   = f"{CACHE_DIR}/sae_full_final.pt"
 RESID_PATH  = f"{CACHE_DIR}/sae_resid_final.pt"
+HYBRID_PATH = f"{CACHE_DIR}/sae_hybrid_final.pt"
 P_PATH      = f"{CACHE_DIR}/P.pt"
+P_HYBRID_PATH = f"{CACHE_DIR}/P_hybrid.pt"
 N_TOKENS = 4_000_000
 bs = 8192
 # EVAL_N      = 100_000     # subset of tokens for the eval (memory-bounded)
@@ -30,6 +33,8 @@ device = t.device("cuda" if t.cuda.is_available() else "cpu")
 # h = t.cat(t.load(f"{CACHE_DIR}/layer_13_chunk_1.pt"), dim=0)[:EVAL_N]   # (100k, 2304)
 # tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0)[:EVAL_N]   # (100k,)
 P = t.load(P_PATH, map_location=device)   # (V, 2304)
+# only present once hybrid has been trained; stays None otherwise so full/resid eval still runs
+P_hybrid = t.load(P_HYBRID_PATH, map_location=device) if os.path.exists(P_HYBRID_PATH) else None
 
 # token_id -> normalized-word id map (needs P for vocab size)
 raw = tokenizer.convert_ids_to_tokens(list(range(P.shape[0])))   # one string per token id
@@ -48,6 +53,13 @@ def load_sae(path):
 
 sae_full,  scale_full  = load_sae(FULL_PATH)
 sae_resid, scale_resid = load_sae(RESID_PATH)
+
+# hybrid is OPTIONAL: only wire it in if both its SAE checkpoint and its trained P table exist,
+# so this whole script still runs (full + resid) before hybrid has been trained.
+HAVE_HYBRID = os.path.exists(HYBRID_PATH) and P_hybrid is not None
+if HAVE_HYBRID:
+    sae_hybrid, scale_hybrid = load_sae(HYBRID_PATH)
+    print("hybrid artifacts found -> including HYBRID in the eval")
 
 # --- OLD: materialized the whole (N, 16384) matrix, OOMs past ~100k tokens ---
 # def feature_acts(sae, scale, mode, bs=8192):
@@ -86,7 +98,10 @@ def stream_topk(sae, scale, mode, n_tokens, K=TOPK, bs=bs):
             for start in range(0, hc.shape[0], bs):
                 hh = hc[start:start+bs].float().to(device)
                 tt = tc[start:start+bs].to(device)
-                x = (hh - P[tt]) if mode == "resid" else hh
+                if   mode == "resid":  x = hh - P[tt]          # unchanged, still uses frozen P.pt
+                elif mode == "hybrid": x = hh - P_hybrid[tt]   # NEW: uses the trained map's table
+                else:                  x = hh                  # full, unchanged
+
                 a = sae.encode(x / scale)                     # (b, F)
                 fired = a > 0
                 freq += fired.sum(dim=0)
@@ -110,6 +125,8 @@ def stream_topk(sae, scale, mode, n_tokens, K=TOPK, bs=bs):
 
 peak_full,  uni_full,  wt_full,  freq_full  = stream_topk(sae_full,  scale_full,  "full",  N_TOKENS)
 peak_resid, uni_resid, wt_resid, freq_resid = stream_topk(sae_resid, scale_resid, "resid", N_TOKENS)
+if HAVE_HYBRID:
+    peak_hyb, uni_hyb, wt_hyb, freq_hyb = stream_topk(sae_hybrid, scale_hybrid, "hybrid", N_TOKENS)
 
 # --- OLD: took the full (N, F) matrix and did its own topk ---
 # def triviality(a, tok):
@@ -159,6 +176,8 @@ def report(name, peak_toks, uni_toks, wt_toks, freq):
 
 mf_full,  nd_full,  al_full  = report("FULL",  peak_full,  uni_full,  wt_full,  freq_full)
 mf_resid, nd_resid, al_resid = report("RESID", peak_resid, uni_resid, wt_resid, freq_resid)
+if HAVE_HYBRID:
+    mf_hyb, nd_hyb, al_hyb = report("HYBRID", peak_hyb, uni_hyb, wt_hyb, freq_hyb)
 
 # side-by-side shift in the distribution (over each SAE's own alive features)
 print("\n=== shift (resid - full) ===")
@@ -199,10 +218,21 @@ for (lo, hi), fb, rb in zip(zip(edges[:-1], edges[1:]), full_bins, resid_bins):
     print(f"{rng:>14} | {fb[0]:>6} {fb[1]:>5.3f} {fb[2]:>5.2f} {fb[3]:>5.3f}        | "
           f"{rb[0]:>6} {rb[1]:>5.3f} {rb[2]:>5.2f} {rb[3]:>5.3f}")
 
+if HAVE_HYBRID:
+    hyb_bins = freq_binned(mf_hyb, nd_hyb, freq_hyb, al_hyb, edges)
+    print("\n=== HYBRID triviality by firing-frequency bin ===")
+    print(f"{'freq range':>14} | {'n':>6} {'mf':>5} {'ndist':>5} {'1word':>5}")
+    for (lo, hi), hb in zip(zip(edges[:-1], edges[1:]), hyb_bins):
+        hi_s = "inf" if hi == float("inf") else str(int(hi))
+        rng = f"{int(lo)}-{hi_s}"
+        print(f"{rng:>14} | {hb[0]:>6} {hb[1]:>5.3f} {hb[2]:>5.2f} {hb[3]:>5.3f}")
+
 # --- save per-feature stats so dashboard.py can pick features without re-running the 4M eval ---
 # "nd" = WEIGHTED (activation-weighted) distinct-word count [the principled metric]; "nd_peak" = old peak metric
 t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "nd_peak": triviality(peak_full, freq_full)[1].cpu(),  "alive": al_full.cpu()},  f"{CACHE_DIR}/stats_full.pt")
 t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "nd_peak": triviality(peak_resid, freq_resid)[1].cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
+if HAVE_HYBRID:
+    t.save({"freq": freq_hyb.cpu(), "nd": nd_hyb.cpu(), "nd_peak": triviality(peak_hyb, freq_hyb)[1].cpu(), "alive": al_hyb.cpu()}, f"{CACHE_DIR}/stats_hybrid.pt")
 print(f"\nsaved per-feature stats to {CACHE_DIR}/stats_*.pt")
 
 # --- distribution plot: is "single-word fraction" just a thresholding artifact? -------------
@@ -220,58 +250,52 @@ matplotlib.use("Agg")                       # headless box -> render to file, no
 import matplotlib.pyplot as plt
 import numpy as np
 
-C_FULL, C_RESID = "#4553c9", "#b5762e"
+C_FULL, C_RESID, C_HYBRID = "#4553c9", "#b5762e", "#2c885f"
 PLOT_BINS = [((TOPK, 1000),        "rare  (20-1k)"),
              ((1000, 100000),      "mid   (1k-100k)"),
              ((100000, float("inf")), "common (>100k)")]
 
-def _unique_and_eff(toks, freq):
-    """Per feature: # unique normalized words (int) and effective # words = exp(entropy)."""
-    nd = triviality(toks, freq)[1].float()   # reuse the distinct-word count
-    ew = eff_words(toks)                      # exp(entropy) of the word distribution
-    return nd, ew
-
-def plot_unique_token_dists(sample_name, toks_full, toks_resid, tag):
-    ndf, ewf = _unique_and_eff(toks_full,  freq_full)
-    ndr, ewr = _unique_and_eff(toks_resid, freq_resid)
+def plot_unique_token_dists(sample_name, series, tag):
+    # series: list of (label, color, toks, alive, freq) -- 2 (full, resid) or 3 (+ hybrid)
     ubins = np.arange(0.5, TOPK + 1.5, 1)    # integer-centered bins 1..K for the unique-count hist
     ebins = np.linspace(1, TOPK, 30)         # continuous bins for effective-#words
     ts    = np.arange(1, TOPK + 1)           # thresholds for the sweep (# unique <= t)
+    # precompute per-series distinct-word count + effective-#words once
+    prepared = [(label, color, triviality(toks, freq)[1].float(), eff_words(toks), alive, freq)
+                for (label, color, toks, alive, freq) in series]
     nrows = len(PLOT_BINS)
     fig, axes = plt.subplots(nrows, 3, figsize=(15, 3.4 * nrows), squeeze=False)
     for r, ((lo, hi), lab) in enumerate(PLOT_BINS):
-        mF = (al_full  & (freq_full  >= lo) & (freq_full  < hi))   # alive full  features in this band
-        mR = (al_resid & (freq_resid >= lo) & (freq_resid < hi))   # alive resid features in this band
-        nF, nR = int(mF.sum()), int(mR.sum())
-        ndF, ndR = ndf[mF].cpu().numpy(), ndr[mR].cpu().numpy()
-        ewF, ewR = ewf[mF].cpu().numpy(), ewr[mR].cpu().numpy()
-
         # col 0: distribution of # unique tokens
         ax = axes[r][0]
-        ax.hist(ndF, bins=ubins, density=True, alpha=.55, color=C_FULL,  label=f"full  (n={nF})")
-        ax.hist(ndR, bins=ubins, density=True, alpha=.55, color=C_RESID, label=f"resid (n={nR})")
+        for label, color, nd, ew, alive, freq in prepared:
+            m = alive & (freq >= lo) & (freq < hi)
+            ax.hist(nd[m].cpu().numpy(), bins=ubins, density=True, alpha=.5, color=color,
+                    label=f"{label} (n={int(m.sum())})")
         ax.set_xlabel(f"# unique words in top-{TOPK}"); ax.set_ylabel("density")
         ax.set_title(f"{lab}  ·  unique-token count"); ax.legend(fontsize=8)
 
         # col 1: threshold sweep -- frac of features called "single-ish" if cutoff is (# unique <= t)
         ax = axes[r][1]
-        cF = [ (ndF <= t).mean() for t in ts ]
-        cR = [ (ndR <= t).mean() for t in ts ]
-        ax.plot(ts, cF, "-o", ms=3, color=C_FULL,  label="full")
-        ax.plot(ts, cR, "-o", ms=3, color=C_RESID, label="resid")
+        for label, color, nd, ew, alive, freq in prepared:
+            m = alive & (freq >= lo) & (freq < hi)
+            ndv = nd[m].cpu().numpy()
+            ax.plot(ts, [ (ndv <= tt).mean() for tt in ts ], "-o", ms=3, color=color, label=label)
         ax.axvline(1, color="#999", lw=.8, ls="--")     # t=1 == the pure single-word fraction
         ax.set_xlabel("threshold t  (# unique words <= t)"); ax.set_ylabel("frac of features")
         ax.set_title(f"{lab}  ·  threshold sensitivity"); ax.legend(fontsize=8)
 
         # col 2: distribution of effective # words (entropy-based, continuous)
         ax = axes[r][2]
-        ax.hist(ewF, bins=ebins, density=True, alpha=.55, color=C_FULL,  label="full")
-        ax.hist(ewR, bins=ebins, density=True, alpha=.55, color=C_RESID, label="resid")
+        for label, color, nd, ew, alive, freq in prepared:
+            m = alive & (freq >= lo) & (freq < hi)
+            ax.hist(ew[m].cpu().numpy(), bins=ebins, density=True, alpha=.5, color=color, label=label)
         ax.set_xlabel("effective # words (exp entropy)"); ax.set_ylabel("density")
         ax.set_title(f"{lab}  ·  effective #words"); ax.legend(fontsize=8)
 
+    labels = " vs ".join(s[0] for s in series)
     fig.suptitle(f"Unique-token distribution in top-{TOPK}  —  {sample_name} sample "
-                 f"(full vs resid, matched frequency)", y=1.002, fontsize=14)
+                 f"({labels}, matched frequency)", y=1.002, fontsize=14)
     fig.tight_layout()
     out = f"{CACHE_DIR}/unique_tokens_{tag}.png"
     fig.savefig(out, dpi=130, bbox_inches="tight"); plt.close(fig)
@@ -279,8 +303,13 @@ def plot_unique_token_dists(sample_name, toks_full, toks_resid, tag):
 
 # PEAK = the "top-20 activating examples" reading (where the ~16% single-word number lived);
 # WEIGHTED = the principled activation-weighted sample. Emit both so the contrast is visible.
-plot_unique_token_dists("PEAK",     peak_full, peak_resid, "peak")
-plot_unique_token_dists("WEIGHTED", wt_full,   wt_resid,   "weighted")
+peak_series = [("full", C_FULL, peak_full, al_full, freq_full), ("resid", C_RESID, peak_resid, al_resid, freq_resid)]
+wt_series   = [("full", C_FULL, wt_full,   al_full, freq_full), ("resid", C_RESID, wt_resid,   al_resid, freq_resid)]
+if HAVE_HYBRID:
+    peak_series.append(("hybrid", C_HYBRID, peak_hyb, al_hyb, freq_hyb))
+    wt_series.append(  ("hybrid", C_HYBRID, wt_hyb,   al_hyb, freq_hyb))
+plot_unique_token_dists("PEAK",     peak_series, "peak")
+plot_unique_token_dists("WEIGHTED", wt_series,   "weighted")
 
 # --- 2D heatmap: feature frequency (x, log) vs # distinct words in max-20 (y) ----------------
 # The mentor's preferred view: the MAX (peak) metric -- "# different words in the max 20" -- which
@@ -292,10 +321,12 @@ plot_unique_token_dists("WEIGHTED", wt_full,   wt_resid,   "weighted")
 # NOTE: high-frequency columns hold very few features (~150 total in the common bucket), so the
 # right edge of each heatmap is sparse/noisy -- read the left and middle, not the far right.
 def heatmap_freq_vs_words():
-    ndF = triviality(peak_full,  freq_full)[1].float()    # # distinct words in max-20, per feature
-    ndR = triviality(peak_resid, freq_resid)[1].float()
-    fqF, fqR = freq_full.float(), freq_resid.float()
-    fmax = float(max(fqF[al_full].max(), fqR[al_resid].max()))
+    # one P(#words|freq) panel per available SAE, plus a difference panel vs FULL
+    saes = [("FULL", peak_full, freq_full.float(), al_full),
+            ("RESID", peak_resid, freq_resid.float(), al_resid)]
+    if HAVE_HYBRID:
+        saes.append(("HYBRID", peak_hyb, freq_hyb.float(), al_hyb))
+    fmax = float(max(fq[al].max() for _, _, fq, al in saes))
     xedges = 10 ** np.arange(np.log10(TOPK), np.log10(fmax) + 0.5, 0.5)   # half-order-of-magnitude bins
     yedges = np.arange(0.5, TOPK + 1.5, 1)                                # integer word-count bins 1..K
 
@@ -305,24 +336,25 @@ def heatmap_freq_vs_words():
         col = H.sum(axis=1, keepdims=True)                        # features per frequency column
         return np.divide(H, col, out=np.zeros_like(H), where=col > 0)   # P(#words | freq)
 
-    Hf = col_norm_hist(ndF, fqF, al_full)
-    Hr = col_norm_hist(ndR, fqR, al_resid)
+    Hs = {name: col_norm_hist(triviality(peak, fq)[1].float(), fq, alive) for name, peak, fq, alive in saes}
     X, Y = np.meshgrid(xedges, yedges)
-    vtop = max(Hf.max(), Hr.max())                                # shared color scale for full & resid
+    vtop = max(H.max() for H in Hs.values())                      # shared color scale across SAEs
+    diff_name = "HYBRID" if HAVE_HYBRID else "RESID"              # difference panel compares this vs FULL
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 5.2))
-    for ax, H, ttl in [(axes[0], Hf, "FULL"), (axes[1], Hr, "RESID")]:
-        pc = ax.pcolormesh(X, Y, H.T, cmap="magma", vmin=0, vmax=vtop)
-        ax.set_xscale("log"); ax.set_title(f"{ttl}   ·   P(#words | freq)")
-        ax.set_xlabel("feature firing frequency (log)"); ax.set_ylabel("# distinct words in max-20")
-        fig.colorbar(pc, ax=ax, fraction=.046)
-    # difference: resid - full. RdBu -> positive (resid heavier) = blue, negative (full heavier) = red.
-    D = (Hr - Hf).T
+    n_panels = len(saes) + 1
+    fig, axes = plt.subplots(1, n_panels, figsize=(6 * n_panels, 5.2))
+    for i, (name, _, _, _) in enumerate(saes):
+        pc = axes[i].pcolormesh(X, Y, Hs[name].T, cmap="magma", vmin=0, vmax=vtop)
+        axes[i].set_xscale("log"); axes[i].set_title(f"{name}   ·   P(#words | freq)")
+        axes[i].set_xlabel("feature firing frequency (log)"); axes[i].set_ylabel("# distinct words in max-20")
+        fig.colorbar(pc, ax=axes[i], fraction=.046)
+    # difference: diff_name - full. RdBu -> positive (diff heavier) = blue, negative (full heavier) = red.
+    D = (Hs[diff_name] - Hs["FULL"]).T
     vmax = float(np.abs(D).max()) or 1e-9
-    pc = axes[2].pcolormesh(X, Y, D, cmap="RdBu", vmin=-vmax, vmax=vmax)
-    axes[2].set_xscale("log"); axes[2].set_title("RESID − FULL   (blue = resid more, red = full more)")
-    axes[2].set_xlabel("feature firing frequency (log)"); axes[2].set_ylabel("# distinct words in max-20")
-    fig.colorbar(pc, ax=axes[2], fraction=.046)
+    pc = axes[-1].pcolormesh(X, Y, D, cmap="RdBu", vmin=-vmax, vmax=vmax)
+    axes[-1].set_xscale("log"); axes[-1].set_title(f"{diff_name} − FULL   (blue = {diff_name.lower()} more, red = full more)")
+    axes[-1].set_xlabel("feature firing frequency (log)"); axes[-1].set_ylabel("# distinct words in max-20")
+    fig.colorbar(pc, ax=axes[-1], fraction=.046)
 
     fig.suptitle("Feature frequency vs max-20 word count  (column-normalized: P(#words | freq))", fontsize=14)
     fig.tight_layout()
