@@ -117,10 +117,12 @@ def dashboard(sae, scale, mode, feat_ids, n_tokens=N_TOKENS, bs=8192):
             focus = tokenizer.decode([toks[p].item()])
             print(f"    [{v:6.1f}] ...{ctx}...  <<{focus!r}>>")
 
-def find_word_feature(sae, scale, mode, words, n_tokens=500_000, topn=3, max_rate=0.10, bs=8192):
+def find_word_feature(sae, scale, mode, words, n_tokens=500_000, topn=3, max_rate=0.02, bs=8192):
     """Find the feature(s) that fire most on a given word (locates the same concept across
     SAEs). Excludes always-on/dense features (firing rate > max_rate) that fire on everything
-    and would otherwise dominate the ranking."""
+    and would otherwise dominate the ranking. max_rate=0.02: a real detector fires << 2% of the
+    time, so a match near that ceiling (or with low mean act) means 'no clean detector exists'.
+    Returns (feature_ids, mean_activations) so callers can see how strong the match actually is."""
     target = set()
     for w in words:                                   # collect token ids for the surface forms
         target.update(tokenizer(w, add_special_tokens=False).input_ids)
@@ -149,15 +151,15 @@ def find_word_feature(sae, scale, mode, words, n_tokens=500_000, topn=3, max_rat
     top = mean_act.topk(topn)
     print(f"[{mode}] features most active on {words} ({cnt} occurrences): "
           f"{[(i, round(v, 2)) for i, v in zip(top.indices.tolist(), top.values.tolist())]}")
-    return top.indices.tolist()
+    return top.indices.tolist(), top.values.tolist()
 
 # ------------------------------------------------------------------
 # Individual-feature dashboards (uncomment to eyeball specific features):
 # s = t.load(f"{CACHE_DIR}/stats_resid.pt")
 # band = s["alive"] & (s["freq"] >= 100) & (s["freq"] < 1000) & (s["nd"] == 1)
 # dashboard(sae_resid, scale_resid, "resid", band.nonzero().squeeze(1)[:8].tolist())
-# dashboard(sae_full, scale_full, "full", find_word_feature(sae_full, scale_full, "full", [" district", " District"]))
-# dashboard(sae_full, scale_full, "full", find_word_feature(sae_full, scale_full, "full", [" health"]))
+# dashboard(sae_full, scale_full, "full", find_word_feature(sae_full, scale_full, "full", [" district", " District"])[0])
+# dashboard(sae_full, scale_full, "full", find_word_feature(sae_full, scale_full, "full", [" health"])[0])
 
 # ================= matched-pairs study =================
 # Question: do the FULL SAE's single-token features stay single-token in the RESID SAE?
@@ -325,17 +327,33 @@ def binned_dashboard(sae, scale, mode, feat_ids, n_tokens=2_000_000, n_bins=5, e
 # The bet: FULL detects the concept with a SINGLE-TOKEN feature (fires on the word across all senses);
 # HYBRID -- token identity absorbed by the trained map -- detects it with a BROADER, context-driven
 # feature. nd_peak / nd_weighted are the distinct-word counts (1 = pure single-token).
-def compare_concept(words, n_tokens=1_000_000):
-    print(f"\n{'#' * 72}\n### CONCEPT: {words} ###\n{'#' * 72}")
-    sf = t.load(f"{CACHE_DIR}/stats_full.pt")
-    ff = find_word_feature(sae_full, scale_full, "full", words, n_tokens=n_tokens, topn=1)
-    print(f"  >> FULL   feature {ff[0]}: nd_peak={int(sf['nd_peak'][ff[0]])}  nd_weighted={int(sf['nd'][ff[0]])}")
-    dashboard(sae_full, scale_full, "full", ff, n_tokens=n_tokens)
-    if HAVE_HYBRID:
-        sh = t.load(f"{CACHE_DIR}/stats_hybrid.pt")
-        hf = find_word_feature(sae_hybrid, scale_hybrid, "hybrid", words, n_tokens=n_tokens, topn=1)
-        print(f"  >> HYBRID feature {hf[0]}: nd_peak={int(sh['nd_peak'][hf[0]])}  nd_weighted={int(sh['nd'][hf[0]])}")
-        dashboard(sae_hybrid, scale_hybrid, "hybrid", hf, n_tokens=n_tokens)
+def _show_match(tag, sae, scale, mode, words, stats, n_tokens, max_rate):
+    ids, vals = find_word_feature(sae, scale, mode, words, n_tokens=n_tokens, topn=1, max_rate=max_rate)
+    fid, mact = ids[0], vals[0]
+    flag = "  <-- WEAK / likely no clean detector" if mact < 2.0 else ""
+    print(f"  >> {tag} #{fid}: mean_act_on_word={mact:.2f}  "
+          f"nd_peak={int(stats['nd_peak'][fid])}  nd_weighted={int(stats['nd'][fid])}{flag}")
+    dashboard(sae, scale, mode, ids, n_tokens=n_tokens)
 
-for _concept in [[" district", " District"], [" news", " News"], [" health"]]:
+def compare_concept(words, n_tokens=1_000_000, max_rate=0.02):
+    print(f"\n{'#' * 72}\n### CONCEPT: {words} ###\n{'#' * 72}")
+    _show_match("FULL  ", sae_full, scale_full, "full", words,
+                t.load(f"{CACHE_DIR}/stats_full.pt"), n_tokens, max_rate)
+    if HAVE_HYBRID:
+        _show_match("HYBRID", sae_hybrid, scale_hybrid, "hybrid", words,
+                    t.load(f"{CACHE_DIR}/stats_hybrid.pt"), n_tokens, max_rate)
+
+# lexical control (district: expect hybrid absorbed it -> no clean detector) + semantic concepts
+# where hybrid should keep/broaden the feature. NOTE: search is by TOKEN, so a concept has to appear
+# as a frequent surface word -- "sycophantic" is too rare to have its own token-feature, so we use
+# frequent semantic words instead.
+CONCEPTS = [
+    [" district", " District"],      # purely lexical control
+    [" news", " News"],
+    [" health"],
+    [" insurance"],                  # semantic
+    [" election", " elections"],     # semantic
+    [" climate"],                    # semantic / abstract
+]
+for _concept in CONCEPTS:
     compare_concept(_concept)
