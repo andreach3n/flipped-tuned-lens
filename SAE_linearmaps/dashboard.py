@@ -313,21 +313,29 @@ def binned_dashboard(sae, scale, mode, feat_ids, n_tokens=2_000_000, n_bins=5, e
             print(f"  bin {bi} act[{vals[ch[-1]].item():5.1f}-{vals[ch[0]].item():5.1f}] "
                   f"n={len(ch):<6} modal {mf:.2f}  distinct {ndist:<4} e.g. {eg}")
 
-# --- eyeball HYBRID features: are the (broader) hybrid features real context concepts? ---
-# Pick BROAD hybrid features (weighted distinct-words nd >= 10) in the 1k-10k firing-frequency band
-# -- the band where hybrid's triviality reduction vs full was largest -- and print their top
-# activating examples in context. If they read as coherent concepts (not mush), the reconstruction
-# win came with genuinely better features.
-if HAVE_HYBRID:
-    sh = t.load(f"{CACHE_DIR}/stats_hybrid.pt")
-    band = sh["alive"] & (sh["freq"] >= 1000) & (sh["freq"] < 10000) & (sh["nd"] >= 10)
-    sel = band.nonzero().squeeze(1)
-    sel = sel[t.linspace(0, len(sel) - 1, 6).long()].tolist()   # 6 spread across the band
-    dashboard(sae_hybrid, scale_hybrid, "hybrid", sel)          # top activating examples per feature
-    binned_dashboard(sae_hybrid, scale_hybrid, "hybrid", sel)   # behavior across activation strength
-else:
-    # fallback (no hybrid yet): the original single-token resid check
-    sr = t.load(f"{CACHE_DIR}/stats_resid.pt")
-    st_feats = (sr["alive"] & (sr["nd"] == 1)).nonzero().squeeze(1)
-    sel = st_feats[t.linspace(0, len(st_feats) - 1, 6).long()].tolist()
-    binned_dashboard(sae_resid, scale_resid, "resid", sel)
+# --- (prior eyeball of a spread of broad hybrid features; uncomment to re-run) ---
+# if HAVE_HYBRID:
+#     sh = t.load(f"{CACHE_DIR}/stats_hybrid.pt")
+#     band = sh["alive"] & (sh["freq"] >= 1000) & (sh["freq"] < 10000) & (sh["nd"] >= 10)
+#     sel = band.nonzero().squeeze(1); sel = sel[t.linspace(0, len(sel) - 1, 6).long()].tolist()
+#     dashboard(sae_hybrid, scale_hybrid, "hybrid", sel); binned_dashboard(sae_hybrid, scale_hybrid, "hybrid", sel)
+
+# ================= full-vs-hybrid concept comparison =================
+# For a concept word, find the feature in FULL and in HYBRID that fires most on it, then show both.
+# The bet: FULL detects the concept with a SINGLE-TOKEN feature (fires on the word across all senses);
+# HYBRID -- token identity absorbed by the trained map -- detects it with a BROADER, context-driven
+# feature. nd_peak / nd_weighted are the distinct-word counts (1 = pure single-token).
+def compare_concept(words, n_tokens=1_000_000):
+    print(f"\n{'#' * 72}\n### CONCEPT: {words} ###\n{'#' * 72}")
+    sf = t.load(f"{CACHE_DIR}/stats_full.pt")
+    ff = find_word_feature(sae_full, scale_full, "full", words, n_tokens=n_tokens, topn=1)
+    print(f"  >> FULL   feature {ff[0]}: nd_peak={int(sf['nd_peak'][ff[0]])}  nd_weighted={int(sf['nd'][ff[0]])}")
+    dashboard(sae_full, scale_full, "full", ff, n_tokens=n_tokens)
+    if HAVE_HYBRID:
+        sh = t.load(f"{CACHE_DIR}/stats_hybrid.pt")
+        hf = find_word_feature(sae_hybrid, scale_hybrid, "hybrid", words, n_tokens=n_tokens, topn=1)
+        print(f"  >> HYBRID feature {hf[0]}: nd_peak={int(sh['nd_peak'][hf[0]])}  nd_weighted={int(sh['nd'][hf[0]])}")
+        dashboard(sae_hybrid, scale_hybrid, "hybrid", hf, n_tokens=n_tokens)
+
+for _concept in [[" district", " District"], [" news", " News"], [" health"]]:
+    compare_concept(_concept)
