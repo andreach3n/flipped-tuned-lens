@@ -9,6 +9,7 @@ Run this instead of re-running the full 4M eval; feature selection reads the
 per-feature stats saved by eval_trivial.py (stats_*.pt).
 """
 import glob
+import os
 import torch as t
 from transformers import AutoTokenizer
 from sae_lens import BatchTopKTrainingSAE, BatchTopKTrainingSAEConfig
@@ -16,7 +17,9 @@ from sae_lens import BatchTopKTrainingSAE, BatchTopKTrainingSAEConfig
 CACHE_DIR   = "/workspace/sae_cache_layer13"
 FULL_PATH   = f"{CACHE_DIR}/sae_full_final.pt"
 RESID_PATH  = f"{CACHE_DIR}/sae_resid_final.pt"
+HYBRID_PATH = f"{CACHE_DIR}/sae_hybrid_final.pt"
 P_PATH      = f"{CACHE_DIR}/P.pt"
+P_HYBRID_PATH = f"{CACHE_DIR}/P_hybrid.pt"
 MODEL_NAME  = "google/gemma-2-2b"
 N_TOKENS    = 1_000_000     # tokens to scan for top activations (small -> fast)
 TOPK        = 20          # top activating examples to show
@@ -25,7 +28,9 @@ SHOW_LOGITS = False        # load the model's unembedding for logit effects (~5 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-P = t.load(P_PATH, map_location=device)   # (V, 2304) per-token linear prediction
+P = t.load(P_PATH, map_location=device)   # (V, 2304) frozen greedy per-token prediction (used by resid)
+# jointly-trained map, only present once hybrid has been trained (used by hybrid)
+P_hybrid = t.load(P_HYBRID_PATH, map_location=device) if os.path.exists(P_HYBRID_PATH) else None
 
 def load_sae(path):
     ckpt = t.load(path, weights_only=False)
@@ -36,6 +41,15 @@ def load_sae(path):
 
 sae_full,  scale_full  = load_sae(FULL_PATH)
 sae_resid, scale_resid = load_sae(RESID_PATH)
+HAVE_HYBRID = os.path.exists(HYBRID_PATH) and P_hybrid is not None
+if HAVE_HYBRID:
+    sae_hybrid, scale_hybrid = load_sae(HYBRID_PATH)
+
+def sae_input(hh, tt, mode):
+    """The activation the SAE encodes, per mode: full=h, resid=h-P (frozen), hybrid=h-P_hybrid (trained)."""
+    if mode == "resid":  return hh - P[tt]
+    if mode == "hybrid": return hh - P_hybrid[tt]
+    return hh
 
 # Unembedding for logit effects (optional). Direct logit attribution: W_dec[f] @ W_U.
 W_U = None
@@ -69,7 +83,7 @@ def dashboard(sae, scale, mode, feat_ids, n_tokens=N_TOKENS, bs=8192):
             for start in range(0, hc.shape[0], bs):
                 hh = hc[start:start+bs].float().to(device)
                 tt = tc[start:start+bs].to(device)
-                x = (hh - P[tt]) if mode == "resid" else hh
+                x = sae_input(hh, tt, mode)
                 a = sae.encode(x / scale)[:, fids]       # only the chosen features
                 acts_parts.append(a.cpu()); toks_parts.append(tt.cpu())
                 seen += hh.shape[0]
@@ -121,7 +135,7 @@ def find_word_feature(sae, scale, mode, words, n_tokens=500_000, topn=3, max_rat
             for start in range(0, hc.shape[0], bs):
                 hh = hc[start:start+bs].float().to(device)
                 tt = tc[start:start+bs].to(device)
-                x = (hh - P[tt]) if mode == "resid" else hh
+                x = sae_input(hh, tt, mode)
                 a = sae.encode(x / scale)              # (b, F)
                 fire += (a > 0).sum(0)
                 m = t.isin(tt, target)                 # positions sitting on the target word
@@ -170,7 +184,7 @@ def top_token_of(sae, scale, mode, feat_ids, n_tokens=500_000, bs=8192):
             hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
             for start in range(0, hc.shape[0], bs):
                 hh = hc[start:start+bs].float().to(device); tt = tc[start:start+bs].to(device)
-                x = (hh - P[tt]) if mode == "resid" else hh
+                x = sae_input(hh, tt, mode)
                 a = sae.encode(x / scale)[:, fids]           # (b, nf)
                 mx, arg = a.max(dim=0)                        # per feature: strongest activation this batch
                 upd = mx > best_val
@@ -194,7 +208,7 @@ def best_feature_per_word(sae, scale, mode, word_tokid_sets, dense_mask, n_token
             hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
             for start in range(0, hc.shape[0], bs):
                 hh = hc[start:start+bs].float().to(device); tt = tc[start:start+bs].to(device)
-                x = (hh - P[tt]) if mode == "resid" else hh
+                x = sae_input(hh, tt, mode)
                 a = sae.encode(x / scale)
                 for wi, tg in enumerate(tgts):
                     m = t.isin(tt, tg)
@@ -229,6 +243,9 @@ def _dense(freq):
 
 _SAES  = {"full": (sae_full, scale_full), "resid": (sae_resid, scale_resid)}
 _STATS = {"full": f"{CACHE_DIR}/stats_full.pt", "resid": f"{CACHE_DIR}/stats_resid.pt"}
+if HAVE_HYBRID:
+    _SAES["hybrid"]  = (sae_hybrid, scale_hybrid)
+    _STATS["hybrid"] = f"{CACHE_DIR}/stats_hybrid.pt"
 
 def matched_pairs(src, tgt, n=100, n_tokens=2_000_000, min_occ=50, show_rows=False):
     """Sample single-token features from `src` SAE, find each's counterpart in `tgt` SAE, and
@@ -272,7 +289,7 @@ def binned_dashboard(sae, scale, mode, feat_ids, n_tokens=2_000_000, n_bins=5, e
             hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
             for start in range(0, hc.shape[0], bs):
                 hh = hc[start:start+bs].float().to(device); tt = tc[start:start+bs].to(device)
-                x = (hh - P[tt]) if mode == "resid" else hh
+                x = sae_input(hh, tt, mode)
                 a = sae.encode(x / scale)[:, fids]
                 acts_parts.append(a.cpu()); toks_parts.append(tt.cpu())
                 seen += hh.shape[0]
@@ -296,8 +313,21 @@ def binned_dashboard(sae, scale, mode, feat_ids, n_tokens=2_000_000, n_bins=5, e
             print(f"  bin {bi} act[{vals[ch[-1]].item():5.1f}-{vals[ch[0]].item():5.1f}] "
                   f"n={len(ch):<6} modal {mf:.2f}  distinct {ndist:<4} e.g. {eg}")
 
-# run on a few single-token resid features: do they stay single-token down the bins?
-sr = t.load(f"{CACHE_DIR}/stats_resid.pt")
-st_feats = (sr["alive"] & (sr["nd"] == 1)).nonzero().squeeze(1)
-sel = st_feats[t.linspace(0, len(st_feats) - 1, 6).long()].tolist()
-binned_dashboard(sae_resid, scale_resid, "resid", sel)
+# --- eyeball HYBRID features: are the (broader) hybrid features real context concepts? ---
+# Pick BROAD hybrid features (weighted distinct-words nd >= 10) in the 1k-10k firing-frequency band
+# -- the band where hybrid's triviality reduction vs full was largest -- and print their top
+# activating examples in context. If they read as coherent concepts (not mush), the reconstruction
+# win came with genuinely better features.
+if HAVE_HYBRID:
+    sh = t.load(f"{CACHE_DIR}/stats_hybrid.pt")
+    band = sh["alive"] & (sh["freq"] >= 1000) & (sh["freq"] < 10000) & (sh["nd"] >= 10)
+    sel = band.nonzero().squeeze(1)
+    sel = sel[t.linspace(0, len(sel) - 1, 6).long()].tolist()   # 6 spread across the band
+    dashboard(sae_hybrid, scale_hybrid, "hybrid", sel)          # top activating examples per feature
+    binned_dashboard(sae_hybrid, scale_hybrid, "hybrid", sel)   # behavior across activation strength
+else:
+    # fallback (no hybrid yet): the original single-token resid check
+    sr = t.load(f"{CACHE_DIR}/stats_resid.pt")
+    st_feats = (sr["alive"] & (sr["nd"] == 1)).nonzero().squeeze(1)
+    sel = st_feats[t.linspace(0, len(st_feats) - 1, 6).long()].tolist()
+    binned_dashboard(sae_resid, scale_resid, "resid", sel)
