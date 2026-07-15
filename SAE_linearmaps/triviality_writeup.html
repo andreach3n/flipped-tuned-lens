@@ -163,8 +163,8 @@
     <p class="lede">A two-day investigation into whether training a sparse autoencoder on the <em>residual</em> (activation minus a linear prediction from the token embedding) produces fewer single-token features than a normal SAE — and a methodological trap that made the answer look different depending on where I looked.</p>
     <div class="meta">
       <span>Notebook write-up</span>
-      <span>8 tests</span>
-      <span>Verdict: null (with caveats worth reading)</span>
+      <span>8 tests + hybrid follow-up</span>
+      <span>Verdict: residual null &rarr; hybrid works</span>
     </div>
   </div>
 
@@ -175,6 +175,7 @@
       <li><strong>Residualization does not reduce them.</strong> Full and residual SAEs are equal on every metric that isn&rsquo;t peak-biased.</li>
       <li><strong>Every apparent effect I found along the way</strong> (&ldquo;residual is more trivial,&rdquo; a ~22% feature &ldquo;churn&rdquo;) turned out to be a <em>frequency</em> or <em>peak-sampling</em> artifact that vanished under proper controls.</li>
       <li>The real deliverable is the <strong>method</strong>: how peak-bias and frequency confounds can manufacture effects that aren&rsquo;t there.</li>
+      <li><strong>Follow-up (a positive result):</strong> training the map <em>jointly</em> with the SAE (the &ldquo;hybrid&rdquo;) reconstructs <em>better</em> (FVU 0.143 &rarr; 0.138) <em>and</em> makes the dictionary less trivial (single-token ~halved, holding within frequency bins). Joint training is the ingredient the frozen residual lacked.</li>
     </ol>
   </div>
 
@@ -392,6 +393,110 @@
       <span class="tag">The methodological takeaway</span>
       <p>Two confounds — <strong>firing frequency</strong> and <strong>peak-sampling</strong> — each independently manufactured an apparent effect that vanished under the right control (matched-frequency bins; activation-weighted measurement). The negative result is only trustworthy <em>because</em> those controls are in place.</p>
     </div>
+    <p style="margin-top:1rem">That said, the null is specifically for a <em>frozen</em> map. Training the map <strong>jointly</strong> with the SAE tells a very different story — the follow-up below.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section class="col">
+    <p class="eyebrow">Follow-up · after the null · mentor&rsquo;s suggestion</p>
+    <div class="test-head"><span class="num">HYBRID</span><h2>Training the map jointly — where it finally works</h2></div>
+    <p>The null above is for a <em>frozen</em> map: fit the linear map first, freeze it, then train the SAE on the leftover residual. My mentor suggested the obvious next move — <strong>train the map and the SAE together</strong>, end-to-end, so they coordinate. Call it the <strong>hybrid</strong> SAE:</p>
+    <div class="feat"><div class="ex" style="white-space:normal">&#x125; = <mark>map(token)</mark> &nbsp;+&nbsp; the SAE&rsquo;s 64 sparse features &nbsp;— the map is a dense, <em>per-token</em> baseline the sparse features build on, and both are trained to reconstruct <span class="kbd">h</span> at once.</div></div>
+    <p>The map becomes a smart per-token baseline (versus the SAE&rsquo;s single <em>global</em> bias), it costs zero sparsity budget (k stays 64), and — crucially — it&rsquo;s optimized <em>with</em> the SAE rather than greedily on its own.</p>
+
+    <h3 style="margin-top:1.6rem">Result 1 — it reconstructs better (and joint training is the reason)</h3>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>system</th><th>FVU on h</th><th>vs full</th></tr></thead>
+        <tbody>
+          <tr><td>full SAE</td><td class="num-mono">0.1426</td><td>—</td></tr>
+          <tr><td>frozen map + residual SAE</td><td class="num-mono">0.1445</td><td class="num-mono">+0.0019 (worse)</td></tr>
+          <tr><td><strong>hybrid</strong> (jointly-trained map)</td><td class="num-mono hi">0.1376</td><td class="num-mono hi">&minus;0.0050 (better)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap">Fraction of variance unexplained on the raw activation, 2M tokens, matched dictionary/k. Lower = better.</p>
+    <div class="call finding">
+      <span class="tag">Finding</span>
+      <p>The hybrid beats the plain SAE by ~3.5% relative FVU at the same sparsity. The <em>frozen</em> map ties (even slightly loses) — so it&rsquo;s specifically the <strong>joint training</strong> that helps: the map settles where it leaves the SAE an <em>easier</em> residual, instead of minimizing its own error greedily. Cost: ~5M extra <em>dense</em> parameters (the map), so the honest claim is &ldquo;better reconstruction at matched <em>sparsity</em>,&rdquo; not a free lunch.</p>
+    </div>
+
+    <h3 style="margin-top:1.6rem">Result 2 — the dictionary is also less trivial (the bonus)</h3>
+    <p>This is the part that reaches back to the original question. On the max-20 metric, the hybrid&rsquo;s single-token fraction is <strong>roughly halved</strong>:</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>SAE</th><th>single-word % (peak)</th><th>distinct words (peak)</th><th>eff #words (weighted)</th></tr></thead>
+        <tbody>
+          <tr><td>full</td><td class="num-mono">15.7%</td><td class="num-mono">9.20</td><td class="num-mono">13.2</td></tr>
+          <tr><td>residual</td><td class="num-mono">17.9%</td><td class="num-mono">9.25</td><td class="num-mono">12.8</td></tr>
+          <tr><td><strong>hybrid</strong></td><td class="num-mono hi">9.2%</td><td class="num-mono hi">10.77</td><td class="num-mono hi">14.5</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>And unlike the residual&rsquo;s aggregate mirage, this <strong>survives the frequency control</strong>: hybrid features are broader than full&rsquo;s in <em>every</em> firing-frequency bin — even though hybrid has <em>more</em> rare features (which should bias it toward looking <em>more</em> trivial). So it&rsquo;s a real per-feature effect, not a composition artifact.</p>
+
+    <div style="margin:1.4rem 0;">
+      <img src="plots/heatmap_freq_vs_words.png" style="width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);" alt="Four-panel heatmap: FULL, RESID, HYBRID P(#words|freq), and HYBRID minus FULL.">
+    </div>
+    <p class="cap">P(#words | frequency) for each SAE, plus <strong>HYBRID &minus; FULL</strong> (right). Unlike the near-white resid&minus;full panel from Test 8, here mass visibly drains out of the single-token corner (red, bottom-left) and shifts up into broader features — a real shift.</p>
+
+    <div style="margin:1.4rem 0;">
+      <img src="plots/dict_equal_weight.png" style="width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface);box-shadow:var(--shadow);" alt="Equal-weight distribution of max-20 unique-word count for full, resid, and hybrid.">
+    </div>
+    <p class="cap">Every feature weighted equally (no frequency control). Even in this deliberately naive view, hybrid (green) has a visibly smaller single-token spike and more mass at the broad end.</p>
+
+    <div class="call finding">
+      <span class="tag">Finding</span>
+      <p>Two-for-one: the hybrid reconstructs <em>better</em> and its sparse dictionary is <em>cleaner</em>, at matched sparsity. This is the original hypothesis (&ldquo;residualize &rarr; fewer trivial features&rdquo;) finally working — but via <strong>joint training</strong>, which the frozen residual never delivered.</p>
+    </div>
+
+    <h3 style="margin-top:1.6rem">Looking at the features — single-token &rarr; concept</h3>
+    <p>The clinching check: for a given concept word, find the feature that fires most on it in each SAE. <strong>Every time, full uses a single-token detector and hybrid uses a broader coherent concept.</strong></p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>concept</th><th>full — distinct (peak)</th><th>hybrid — distinct</th><th>what hybrid&rsquo;s feature is</th></tr></thead>
+        <tbody>
+          <tr><td>district</td><td class="num-mono">1</td><td class="num-mono hi">7</td><td>federal district <em>court</em> / legal filings</td></tr>
+          <tr><td>news</td><td class="num-mono">1</td><td class="num-mono hi">1 (10 wtd)</td><td>news reporting</td></tr>
+          <tr><td>health</td><td class="num-mono">1</td><td class="num-mono hi">5</td><td>single-payer / universal healthcare</td></tr>
+          <tr><td>insurance</td><td class="num-mono">1</td><td class="num-mono hi">5</td><td>health insurance / coverage</td></tr>
+          <tr><td>election</td><td class="num-mono">1</td><td class="num-mono hi">16</td><td>electoral politics</td></tr>
+          <tr><td>climate</td><td class="num-mono">1</td><td class="num-mono hi">1 (10 wtd)</td><td>climate change</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cap">&ldquo;Distinct&rdquo; = unique tokens in the feature&rsquo;s max-20 examples (1 = pure single-token). Full is single-token on every concept; hybrid is broader on every one.</p>
+
+    <p>Three of these, straight from the feature dashboards (highlighted token = where the feature fires):</p>
+
+    <div class="feat">
+      <h4>&ldquo;health&rdquo; — full (single-token) vs hybrid (healthcare policy)</h4>
+      <div class="ex"><b>full #7909:</b> …the <mark>health</mark> risks · <mark>health</mark> disparities · <mark>health</mark> insurance · <mark>health</mark> care · <mark>health</mark> policy…</div>
+      <div class="ex"><b>hybrid #9204:</b> …single payer <mark>health</mark> care · Single <mark>Payer</mark> · coverage to <mark>everyone</mark> · <mark>universal</mark> coverage · single-payer <mark>health</mark> reform…</div>
+      <p class="verdict notrivial">Full fires on the word &ldquo;health.&rdquo; Hybrid fires on the <b>single-payer / universal-coverage</b> concept — health, payer, universal, everyone, coverage.</p>
+    </div>
+
+    <div class="feat">
+      <h4>&ldquo;election&rdquo; — full (single-token) vs hybrid (electoral politics)</h4>
+      <div class="ex"><b>full #7111:</b> …an <mark>election</mark> year · <mark>election</mark> campaign · <mark>election</mark> ads · <mark>election</mark> season · <mark>election</mark> results…</div>
+      <div class="ex"><b>hybrid #14002:</b> …the <mark>ballot</mark> · <mark>incumbent</mark> Mitch McConnell · City Council <mark>race</mark> · running for <mark>reelection</mark> · the <mark>voters</mark> · his Tea Party <mark>challenger</mark>…</div>
+      <p class="verdict notrivial">Full fires on &ldquo;election.&rdquo; Hybrid spreads across the whole <b>electoral field</b> — ballot, incumbent, race, voters, challenger (16 distinct words at peak vs full&rsquo;s 1).</p>
+    </div>
+
+    <div class="feat">
+      <h4>&ldquo;district&rdquo; — full (single-token) vs hybrid (district court)</h4>
+      <div class="ex"><b>full #13449:</b> …<mark>district</mark> boundaries · <mark>district</mark> attorney · <mark>District</mark> of Columbia · financial <mark>district</mark> · Amritsar <mark>district</mark>…</div>
+      <div class="ex"><b>hybrid #3852:</b> …U.S. <mark>District</mark> <mark>Court</mark> · <mark>Federal</mark> District Court · <mark>federal</mark> court in Illinois · civil case <mark>filed</mark>…</div>
+      <p class="verdict notrivial">Full fires on &ldquo;district&rdquo; across all senses. Hybrid specialized into the <b>federal-district-<em>court</em> / legal-filing</b> context — the bare token got decomposed into a context concept.</p>
+    </div>
+
+    <div class="call caveat">
+      <span class="tag">Honest caveats</span>
+      <p><strong>(1)</strong> The single-token detection didn&rsquo;t <em>vanish</em> — it moved into the dense map. The <em>sparse dictionary</em> is cleaner; the model isn&rsquo;t representing fewer tokens. <strong>(2)</strong> It&rsquo;s <strong>word &rarr; topic, not word &rarr; abstraction</strong> — hybrid features are broader <em>topical</em> concepts (health insurance, climate change), not abstract features like &ldquo;sycophancy.&rdquo; <strong>(3)</strong> Purely-lexical tokens can get <em>absorbed</em> rather than broadened: hybrid has no clean &ldquo;district&rdquo; feature at all — the map ate the bare token signal, and the best match specialized to the legal sense. <strong>(4)</strong> The FVU gain is modest and buys ~5M dense params.</p>
+    </div>
+
+    <p><strong>Bottom line:</strong> the frozen residual was a null, but jointly training the map (hybrid) is a genuine two-for-one — better reconstruction <em>and</em> a less-trivial dictionary at matched sparsity. The active ingredient is the <em>coordination</em> between map and SAE, not the mere subtraction of a per-token vector.</p>
   </section>
 
   <section class="col">

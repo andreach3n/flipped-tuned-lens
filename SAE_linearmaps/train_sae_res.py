@@ -17,11 +17,13 @@ MODEL_NAME = "google/gemma-2-2b"
 LAYER=13
 D_IN=2304
 D_SAE=16384
-K=64
+K    = int(os.environ.get("K", 64))        # sweep: K=32 MODE=full python train_sae_res.py
 LR=4e-4
 CACHE_DIR="/workspace/sae_cache_layer13"
 BATCH = 4096
-MODE = "hybrid"
+MODE = os.environ.get("MODE", "hybrid")    # "full" | "resid" | "hybrid"
+SEED = int(os.environ.get("SEED", 0))      # reproducibility across the sweep fleet
+TRAIN_TOKENS = int(os.environ.get("TRAIN_TOKENS", 20_000_000))  # cap training length (full cache ~50M; FVU converges by ~20M)
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 model = HookedTransformer.from_pretrained_no_processing(MODEL_NAME, dtype=t.bfloat16).to(device)
@@ -33,6 +35,7 @@ cfg = BatchTopKTrainingSAEConfig(
     apply_b_dec_to_input=True,
     normalize_activations="none",   # you normalize in iter_batches
 )
+t.manual_seed(SEED)                        # deterministic SAE init (reproducible fleet)
 sae = BatchTopKTrainingSAE(cfg).to(device)
 
 linear_map = nn.Linear(2304, 2304).to(device)
@@ -69,12 +72,13 @@ t.cuda.empty_cache()
 # because in hybrid mode P[token] is recomputed each step through the TRAINABLE linear map.
 def iter_batches():
     layer_files = sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt"))
-    for lf in layer_files:
+    for ci, lf in enumerate(layer_files):
         tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
         h = t.cat(t.load(lf), dim=0)
         tok = t.cat(t.load(tf), dim=0)
 
-        shuffled_idx = t.randperm(h.shape[0])
+        g = t.Generator().manual_seed(SEED * 1000 + ci)   # deterministic data order, per chunk
+        shuffled_idx = t.randperm(h.shape[0], generator=g)
         h = h[shuffled_idx]
         tok = tok[shuffled_idx]
 
@@ -89,6 +93,7 @@ opt = t.optim.Adam(params, lr=LR)
 n_since_fired = t.zeros(D_SAE, device=device)
 DEAD_WINDOW = 200
 N = 100
+seen_tokens = 0
 for step, (h_batch, tok_batch) in enumerate(iter_batches()):
     dead = n_since_fired > DEAD_WINDOW
 
@@ -134,7 +139,11 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
         }
         if MODE == "hybrid":
             ckpt["linear_map"] = linear_map.state_dict()   # JOINTLY-TRAINED map; differs from the frozen P.pt
-        t.save(ckpt, f"{CACHE_DIR}/sae_{MODE}_latest.pt")
+        t.save(ckpt, f"{CACHE_DIR}/sae_{MODE}_k{K}_latest.pt")
+
+    seen_tokens += h_batch.shape[0]
+    if seen_tokens >= TRAIN_TOKENS:        # stop once the token budget is hit
+        break
 
 # final artifact for the trivial-fraction eval (weights + cfg + scale; no optimizer needed)
 final_ckpt = {
@@ -150,6 +159,6 @@ if MODE == "hybrid":
 # save the JOINTLY-TRAINED prediction table so eval can subtract it (hybrid only)
 if MODE == "hybrid":
     with t.no_grad():
-        t.save(linear_map(embed_W.float()), f"{CACHE_DIR}/P_hybrid.pt")
-t.save(final_ckpt, f"{CACHE_DIR}/sae_{MODE}_final.pt")
-print(f"saved final SAE -> {CACHE_DIR}/sae_{MODE}_final.pt")
+        t.save(linear_map(embed_W.float()), f"{CACHE_DIR}/P_hybrid_k{K}.pt")
+t.save(final_ckpt, f"{CACHE_DIR}/sae_{MODE}_k{K}_final.pt")
+print(f"saved final SAE -> {CACHE_DIR}/sae_{MODE}_k{K}_final.pt")
