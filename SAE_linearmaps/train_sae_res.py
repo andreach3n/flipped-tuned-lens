@@ -49,7 +49,7 @@ with t.no_grad():
         t.save(P, f"{CACHE_DIR}/P.pt")
 
 # hybrid needs the embedding table kept around to recompute P[token] WITH gradient each step
-embed_W = embed_table.detach() if MODE == "hybrid" else None
+embed_W = embed_table.detach() if MODE in ("hybrid", "outbias") else None
 del embed_table
 
 del model                # free ~5 GB — not needed after P is built
@@ -88,7 +88,7 @@ def iter_batches():
             yield h_batch, tok_batch
 
 # hybrid jointly trains the linear map (warm-started from the fitted map) alongside the SAE
-params = list(sae.parameters()) + (list(linear_map.parameters()) if MODE == "hybrid" else [])
+params = list(sae.parameters()) + (list(linear_map.parameters()) if MODE in ("hybrid", "outbias") else [])
 opt = t.optim.Adam(params, lr=LR)
 n_since_fired = t.zeros(D_SAE, device=device)
 DEAD_WINDOW = 200
@@ -98,16 +98,27 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
     dead = n_since_fired > DEAD_WINDOW
 
     if MODE == "hybrid":
-        P_batch = linear_map(embed_W[tok_batch].float())   # per-token bias, TRAINABLE (grad flows into the map)
+        P_batch = linear_map(embed_W[tok_batch].float())   # per-token bias SUBTRACTED from the encoder input
         x = (h_batch - P_batch) / scale
+    elif MODE == "outbias":
+        P_batch = linear_map(embed_W[tok_batch].float())   # per-token bias added at the OUTPUT only
+        x = h_batch / scale                                # encoder sees the FULL activation (token NOT removed)
     elif MODE == "resid":
         x = (h_batch - P[tok_batch]) / scale               # frozen greedy map
     else:
         x = h_batch / scale                                # full activation
 
     out = sae.training_forward_pass(TrainStepInput(sae_in=x, coefficients={}, dead_neuron_mask=dead, n_training_steps=step, is_logging_step=False))
+    if MODE == "outbias":
+        # encoder saw the full h; the decoder must output the residual so that P + decode = h.
+        # override the SAE's own loss with a reconstruction loss on h, map added at the OUTPUT and
+        # jointly trained. NOTE: this bypasses the BatchTopK dead-neuron aux term (it lived in
+        # out.loss) -- watch the dead-feature count vs hybrid.
+        loss = ((P_batch + out.sae_out * scale - h_batch) ** 2).mean()
+    else:
+        loss = out.loss
     opt.zero_grad()
-    out.loss.backward()
+    loss.backward()
     t.nn.utils.clip_grad_norm_(params, 1.0)
     opt.step()
 
@@ -120,7 +131,7 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
         l0 = (out.feature_acts > 0).float().sum(-1).mean()
         n_dead = int(dead.sum())
         msg = f"step {step:6d} | loss {out.loss.item():.3f} | FVU {fvu.item():.3f} | L0 {l0.item():.1f} | dead {n_dead}"
-        if MODE == "hybrid":
+        if MODE in ("hybrid", "outbias"):
             with t.no_grad():   # FVU on the FULL activation h -- the number to compare against the full SAE's 0.143
                 fvu_h = ((h_batch - (P_batch + out.sae_out * scale))**2).mean() / h_batch.var()
             msg += f" | FVU_h {fvu_h.item():.3f}"
@@ -137,7 +148,7 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
             "opt": opt.state_dict(),
             "n_since_fired": n_since_fired,
         }
-        if MODE == "hybrid":
+        if MODE in ("hybrid", "outbias"):
             ckpt["linear_map"] = linear_map.state_dict()   # JOINTLY-TRAINED map; differs from the frozen P.pt
         t.save(ckpt, f"{CACHE_DIR}/sae_{MODE}_k{K}_latest.pt")
 
@@ -153,12 +164,12 @@ final_ckpt = {
     "step": step,
     "mode": MODE,
 }
-if MODE == "hybrid":
+if MODE in ("hybrid", "outbias"):
     final_ckpt["linear_map"] = linear_map.state_dict()     # needed at eval to rebuild the trained P[token]
 
-# save the JOINTLY-TRAINED prediction table so eval can subtract it (hybrid only)
-if MODE == "hybrid":
+# save the JOINTLY-TRAINED prediction table so eval can add/subtract it (hybrid & outbias)
+if MODE in ("hybrid", "outbias"):
     with t.no_grad():
-        t.save(linear_map(embed_W.float()), f"{CACHE_DIR}/P_hybrid_k{K}.pt")
+        t.save(linear_map(embed_W.float()), f"{CACHE_DIR}/P_{MODE}_k{K}.pt")
 t.save(final_ckpt, f"{CACHE_DIR}/sae_{MODE}_k{K}_final.pt")
 print(f"saved final SAE -> {CACHE_DIR}/sae_{MODE}_k{K}_final.pt")
