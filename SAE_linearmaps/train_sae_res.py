@@ -110,12 +110,20 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
 
     out = sae.training_forward_pass(TrainStepInput(sae_in=x, coefficients={}, dead_neuron_mask=dead, n_training_steps=step, is_logging_step=False))
     if MODE == "outbias":
-        # encoder saw the full h; the decoder must output the residual so that P + decode = h.
-        # reconstruction loss on h, map added at the OUTPUT and jointly trained. Divide by scale so
-        # it matches the SAE's native (scaled-space) loss magnitude -- otherwise the raw-unit loss is
-        # ~scale^2 too large and the effective LR blows up (features die, FVU stalls).
-        # NOTE: still bypasses the BatchTopK dead-neuron aux term -- watch the dead-feature count.
-        loss = (((P_batch + out.sae_out * scale - h_batch) / scale) ** 2).mean()
+        # encoder saw the full h; the decoder must output the residual target = (h-P)/scale so that
+        # P + decode*scale = h. Rebuild the SAE's native training loss against THIS target:
+        #   (1) MSE in the library's exact form -- sum over features, mean over batch (NOT .mean()
+        #       over everything, which is ~d_in too small and mis-scales the LR), and
+        #   (2) the BatchTopK dead-neuron AuxK -- reuse the SAE's own routine but pass `target` as
+        #       sae_in, so its residual (target - sae_out) resurrects neurons toward the RIGHT error
+        #       (no token-prediction confound).
+        target = (h_batch - P_batch) / scale
+        recon = ((out.sae_out - target) ** 2).sum(dim=-1).mean()
+        aux = sae.calculate_topk_aux_loss(
+            sae_in=target, sae_out=out.sae_out,
+            hidden_pre=out.hidden_pre, dead_neuron_mask=dead,
+        )
+        loss = recon + aux
     else:
         loss = out.loss
     opt.zero_grad()
