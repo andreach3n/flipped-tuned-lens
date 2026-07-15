@@ -111,10 +111,11 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
     out = sae.training_forward_pass(TrainStepInput(sae_in=x, coefficients={}, dead_neuron_mask=dead, n_training_steps=step, is_logging_step=False))
     if MODE == "outbias":
         # encoder saw the full h; the decoder must output the residual so that P + decode = h.
-        # override the SAE's own loss with a reconstruction loss on h, map added at the OUTPUT and
-        # jointly trained. NOTE: this bypasses the BatchTopK dead-neuron aux term (it lived in
-        # out.loss) -- watch the dead-feature count vs hybrid.
-        loss = ((P_batch + out.sae_out * scale - h_batch) ** 2).mean()
+        # reconstruction loss on h, map added at the OUTPUT and jointly trained. Divide by scale so
+        # it matches the SAE's native (scaled-space) loss magnitude -- otherwise the raw-unit loss is
+        # ~scale^2 too large and the effective LR blows up (features die, FVU stalls).
+        # NOTE: still bypasses the BatchTopK dead-neuron aux term -- watch the dead-feature count.
+        loss = (((P_batch + out.sae_out * scale - h_batch) / scale) ** 2).mean()
     else:
         loss = out.loss
     opt.zero_grad()
