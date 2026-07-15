@@ -13,6 +13,10 @@ P = t.load(f"{CACHE_DIR}/P.pt", map_location=device)   # (V, 2304)
 P_HYBRID_PATH = f"{CACHE_DIR}/P_hybrid.pt"
 HYBRID_PATH   = f"{CACHE_DIR}/sae_hybrid_final.pt"
 P_hybrid = t.load(P_HYBRID_PATH, map_location=device) if os.path.exists(P_HYBRID_PATH) else None
+# outbias ablation: encoder sees full h, jointly-trained map added at the OUTPUT (k-tagged files)
+P_OUTBIAS_PATH = f"{CACHE_DIR}/P_outbias_k64.pt"
+OUTBIAS_PATH   = f"{CACHE_DIR}/sae_outbias_k64_final.pt"
+P_outbias = t.load(P_OUTBIAS_PATH, map_location=device) if os.path.exists(P_OUTBIAS_PATH) else None
 
 def load_sae(path):
     ckpt = t.load(path, weights_only=False)
@@ -29,6 +33,11 @@ HAVE_HYBRID = os.path.exists(HYBRID_PATH) and P_hybrid is not None
 if HAVE_HYBRID:
     sae_hybrid, scale_hybrid = load_sae(HYBRID_PATH)
     print("hybrid artifacts found -> including HYBRID FVU")
+
+HAVE_OUTBIAS = os.path.exists(OUTBIAS_PATH) and P_outbias is not None
+if HAVE_OUTBIAS:
+    sae_outbias, scale_outbias = load_sae(OUTBIAS_PATH)
+    print("outbias artifacts found -> including OUTBIAS FVU")
 
 def recon_full(hh):
     x = hh / scale_full
@@ -48,9 +57,13 @@ def recon_hybrid(hh, tt):
     a = sae_hybrid.encode((hh - p) / scale_hybrid)
     return p + sae_hybrid.decode(a) * scale_hybrid  # composite ĥ (map + hybrid SAE)
 
+def recon_outbias(hh, tt):
+    a = sae_outbias.encode(hh / scale_outbias)      # encoder sees the FULL h (token NOT removed)
+    return P_outbias[tt] + sae_outbias.decode(a) * scale_outbias   # map added at the OUTPUT
+
 # float64 accumulators: summing ~5e9 float32 squares drifts; .double() first avoids it
 sse_full = sse_comp = sse_r = 0.0
-sse_hybrid = 0.0
+sse_hybrid = sse_outbias = 0.0
 h_sum = h_sumsq = 0.0
 r_sum = r_sumsq = 0.0
 n_elem = 0
@@ -73,6 +86,8 @@ with t.no_grad():
             sse_r    += ((r  - r_hat     )**2).double().sum().item()
             if HAVE_HYBRID:
                 sse_hybrid += ((hh - recon_hybrid(hh, tt))**2).double().sum().item()
+            if HAVE_OUTBIAS:
+                sse_outbias += ((hh - recon_outbias(hh, tt))**2).double().sum().item()
 
             h_sum += hh.double().sum().item();  h_sumsq += (hh**2).double().sum().item()
             r_sum += r.double().sum().item();   r_sumsq += (r**2).double().sum().item()
@@ -92,3 +107,5 @@ print(f"FVU on r  — resid SAE alone: {sse_r   /(n_elem*var_r):.4f}   (expect ~
 print(f"identity check: {sse_r/(n_elem*var_r) * var_r/var_h:.4f} == composite FVU above")
 if HAVE_HYBRID:
     print(f"FVU on h  — hybrid (joint)  : {sse_hybrid/(n_elem*var_h):.4f}   (beat full's {sse_full/(n_elem*var_h):.4f}?)")
+if HAVE_OUTBIAS:
+    print(f"FVU on h  — outbias         : {sse_outbias/(n_elem*var_h):.4f}   (encoder sees h, map at output; 20M-trained)")

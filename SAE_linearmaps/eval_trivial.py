@@ -20,6 +20,7 @@ CACHE_DIR   = "/workspace/sae_cache_layer13"
 FULL_PATH   = f"{CACHE_DIR}/sae_full_final.pt"
 RESID_PATH  = f"{CACHE_DIR}/sae_resid_final.pt"
 HYBRID_PATH = f"{CACHE_DIR}/sae_hybrid_final.pt"
+OUTBIAS_PATH = f"{CACHE_DIR}/sae_outbias_k64_final.pt"   # ablation: encoder sees full h, map at output
 P_PATH      = f"{CACHE_DIR}/P.pt"
 P_HYBRID_PATH = f"{CACHE_DIR}/P_hybrid.pt"
 N_TOKENS = 4_000_000
@@ -61,6 +62,13 @@ if HAVE_HYBRID:
     sae_hybrid, scale_hybrid = load_sae(HYBRID_PATH)
     print("hybrid artifacts found -> including HYBRID in the eval")
 
+# outbias ablation: encoder saw the FULL h (like full mode), map added only at OUTPUT. For
+# triviality the map is irrelevant (features are detected from h), so its stream uses x = hh.
+HAVE_OUTBIAS = os.path.exists(OUTBIAS_PATH)
+if HAVE_OUTBIAS:
+    sae_outbias, scale_outbias = load_sae(OUTBIAS_PATH)
+    print("outbias artifacts found -> including OUTBIAS in the eval")
+
 # --- OLD: materialized the whole (N, 16384) matrix, OOMs past ~100k tokens ---
 # def feature_acts(sae, scale, mode, bs=8192):
 #     outs = []
@@ -98,9 +106,9 @@ def stream_topk(sae, scale, mode, n_tokens, K=TOPK, bs=bs):
             for start in range(0, hc.shape[0], bs):
                 hh = hc[start:start+bs].float().to(device)
                 tt = tc[start:start+bs].to(device)
-                if   mode == "resid":  x = hh - P[tt]          # unchanged, still uses frozen P.pt
-                elif mode == "hybrid": x = hh - P_hybrid[tt]   # NEW: uses the trained map's table
-                else:                  x = hh                  # full, unchanged
+                if   mode == "resid":  x = hh - P[tt]          # encoder sees the residual (frozen map)
+                elif mode == "hybrid": x = hh - P_hybrid[tt]   # encoder sees the residual (trained map)
+                else:                  x = hh                  # full AND outbias: encoder sees the full h
 
                 a = sae.encode(x / scale)                     # (b, F)
                 fired = a > 0
@@ -127,6 +135,8 @@ peak_full,  uni_full,  wt_full,  freq_full  = stream_topk(sae_full,  scale_full,
 peak_resid, uni_resid, wt_resid, freq_resid = stream_topk(sae_resid, scale_resid, "resid", N_TOKENS)
 if HAVE_HYBRID:
     peak_hyb, uni_hyb, wt_hyb, freq_hyb = stream_topk(sae_hybrid, scale_hybrid, "hybrid", N_TOKENS)
+if HAVE_OUTBIAS:
+    peak_ob, uni_ob, wt_ob, freq_ob = stream_topk(sae_outbias, scale_outbias, "outbias", N_TOKENS)
 
 # --- OLD: took the full (N, F) matrix and did its own topk ---
 # def triviality(a, tok):
@@ -178,6 +188,8 @@ mf_full,  nd_full,  al_full  = report("FULL",  peak_full,  uni_full,  wt_full,  
 mf_resid, nd_resid, al_resid = report("RESID", peak_resid, uni_resid, wt_resid, freq_resid)
 if HAVE_HYBRID:
     mf_hyb, nd_hyb, al_hyb = report("HYBRID", peak_hyb, uni_hyb, wt_hyb, freq_hyb)
+if HAVE_OUTBIAS:
+    mf_ob, nd_ob, al_ob = report("OUTBIAS", peak_ob, uni_ob, wt_ob, freq_ob)
 
 # side-by-side shift in the distribution (over each SAE's own alive features)
 print("\n=== shift (resid - full) ===")
@@ -227,12 +239,23 @@ if HAVE_HYBRID:
         rng = f"{int(lo)}-{hi_s}"
         print(f"{rng:>14} | {hb[0]:>6} {hb[1]:>5.3f} {hb[2]:>5.2f} {hb[3]:>5.3f}")
 
+if HAVE_OUTBIAS:
+    ob_bins = freq_binned(mf_ob, nd_ob, freq_ob, al_ob, edges)
+    print("\n=== OUTBIAS triviality by firing-frequency bin ===")
+    print(f"{'freq range':>14} | {'n':>6} {'mf':>5} {'ndist':>5} {'1word':>5}")
+    for (lo, hi), ob in zip(zip(edges[:-1], edges[1:]), ob_bins):
+        hi_s = "inf" if hi == float("inf") else str(int(hi))
+        rng = f"{int(lo)}-{hi_s}"
+        print(f"{rng:>14} | {ob[0]:>6} {ob[1]:>5.3f} {ob[2]:>5.2f} {ob[3]:>5.3f}")
+
 # --- save per-feature stats so dashboard.py can pick features without re-running the 4M eval ---
 # "nd" = WEIGHTED (activation-weighted) distinct-word count [the principled metric]; "nd_peak" = old peak metric
 t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "nd_peak": triviality(peak_full, freq_full)[1].cpu(),  "alive": al_full.cpu()},  f"{CACHE_DIR}/stats_full.pt")
 t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "nd_peak": triviality(peak_resid, freq_resid)[1].cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
 if HAVE_HYBRID:
     t.save({"freq": freq_hyb.cpu(), "nd": nd_hyb.cpu(), "nd_peak": triviality(peak_hyb, freq_hyb)[1].cpu(), "alive": al_hyb.cpu()}, f"{CACHE_DIR}/stats_hybrid.pt")
+if HAVE_OUTBIAS:
+    t.save({"freq": freq_ob.cpu(), "nd": nd_ob.cpu(), "nd_peak": triviality(peak_ob, freq_ob)[1].cpu(), "alive": al_ob.cpu()}, f"{CACHE_DIR}/stats_outbias.pt")
 print(f"\nsaved per-feature stats to {CACHE_DIR}/stats_*.pt")
 
 # --- distribution plot: is "single-word fraction" just a thresholding artifact? -------------
@@ -250,7 +273,7 @@ matplotlib.use("Agg")                       # headless box -> render to file, no
 import matplotlib.pyplot as plt
 import numpy as np
 
-C_FULL, C_RESID, C_HYBRID = "#4553c9", "#b5762e", "#2c885f"
+C_FULL, C_RESID, C_HYBRID, C_OUTBIAS = "#4553c9", "#b5762e", "#2c885f", "#c0392b"
 PLOT_BINS = [((TOPK, 1000),        "rare  (20-1k)"),
              ((1000, 100000),      "mid   (1k-100k)"),
              ((100000, float("inf")), "common (>100k)")]
@@ -308,6 +331,9 @@ wt_series   = [("full", C_FULL, wt_full,   al_full, freq_full), ("resid", C_RESI
 if HAVE_HYBRID:
     peak_series.append(("hybrid", C_HYBRID, peak_hyb, al_hyb, freq_hyb))
     wt_series.append(  ("hybrid", C_HYBRID, wt_hyb,   al_hyb, freq_hyb))
+if HAVE_OUTBIAS:
+    peak_series.append(("outbias", C_OUTBIAS, peak_ob, al_ob, freq_ob))
+    wt_series.append(  ("outbias", C_OUTBIAS, wt_ob,   al_ob, freq_ob))
 plot_unique_token_dists("PEAK",     peak_series, "peak")
 plot_unique_token_dists("WEIGHTED", wt_series,   "weighted")
 

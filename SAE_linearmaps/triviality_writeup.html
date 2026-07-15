@@ -496,7 +496,24 @@
       <p><strong>(1)</strong> The single-token detection didn&rsquo;t <em>vanish</em> — it moved into the dense map. The <em>sparse dictionary</em> is cleaner; the model isn&rsquo;t representing fewer tokens. <strong>(2)</strong> It&rsquo;s <strong>word &rarr; topic, not word &rarr; abstraction</strong> — hybrid features are broader <em>topical</em> concepts (health insurance, climate change), not abstract features like &ldquo;sycophancy.&rdquo; <strong>(3)</strong> Purely-lexical tokens can get <em>absorbed</em> rather than broadened: hybrid has no clean &ldquo;district&rdquo; feature at all — the map ate the bare token signal, and the best match specialized to the legal sense. <strong>(4)</strong> The FVU gain is modest and buys ~5M dense params.</p>
     </div>
 
-    <p><strong>Bottom line:</strong> the frozen residual was a null, but jointly training the map (hybrid) is a genuine two-for-one — better reconstruction <em>and</em> a less-trivial dictionary at matched sparsity. The active ingredient is the <em>coordination</em> between map and SAE, not the mere subtraction of a per-token vector.</p>
+    <h3 style="margin-top:1.6rem">What actually de-trivializes the dictionary? (an ablation)</h3>
+    <p>Why are the hybrid&rsquo;s features cleaner — is it because the map removed the token from what the SAE <em>sees</em> (its encoder input is the residual), or from what it has to <em>reconstruct</em> (its target is the residual)? To separate those, I trained a third variant, <strong>&ldquo;outbias&rdquo;</strong>: the encoder sees the <em>full</em> activation <span class="kbd">h</span> (token and all), and the jointly-trained map is added only at the <em>output</em>, so the SAE still reconstructs the residual <span class="kbd">h&minus;P</span>. Same encoder input as full; same reconstruction target as hybrid.</p>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>SAE</th><th>encoder sees</th><th>target</th><th>single-word % (peak)</th><th>eff #words (wtd)</th></tr></thead>
+        <tbody>
+          <tr><td>full</td><td class="num-mono">h</td><td class="num-mono">h</td><td class="num-mono">15.7%</td><td class="num-mono">13.2</td></tr>
+          <tr><td>hybrid</td><td class="num-mono">h&minus;P</td><td class="num-mono">h&minus;P</td><td class="num-mono">9.2%</td><td class="num-mono">14.5</td></tr>
+          <tr><td><strong>outbias</strong></td><td class="num-mono">h</td><td class="num-mono">h&minus;P</td><td class="num-mono hi">7.7%</td><td class="num-mono hi">15.6</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="call finding">
+      <span class="tag">Finding — it&rsquo;s the target, not the encoder</span>
+      <p><strong>Outbias — whose encoder sees the token — is the <em>least</em> trivial of the three</strong>, not the most. So the cleaner dictionary is <strong>not</strong> caused by hiding the token from the encoder. The clean comparison is <em>full vs outbias</em>: identical encoder input (<span class="kbd">h</span>), different target — and outbias is far cleaner. So it&rsquo;s the <strong>reconstruction target</strong> that does the work: making the SAE reconstruct the residual <span class="kbd">h&minus;P</span> instead of the full <span class="kbd">h</span> pushes features toward context and away from single tokens, <em>regardless of what the encoder sees</em>. The encoder input is secondary — if anything, seeing the full <span class="kbd">h</span> gives slightly broader features. On a clean eval, outbias reconstructs about as well as the hybrid (FVU 0.144 vs 0.143 at matched 20M training), and both clearly beat full (0.149) — so it&rsquo;s a cleaner dictionary at essentially the same reconstruction, not a free win on both axes.</p>
+    </div>
+
+    <p><strong>Bottom line:</strong> the frozen residual was a null, but jointly training the map (hybrid) is a genuine two-for-one — better reconstruction <em>and</em> a less-trivial dictionary at matched sparsity. The active ingredient is the <em>coordination</em> between map and SAE, not the mere subtraction of a per-token vector — and the ablation pins down <em>why</em> the dictionary gets cleaner: it&rsquo;s that the SAE reconstructs the residual rather than the full activation, not anything about what its encoder sees.</p>
   </section>
 
   <section class="col">
