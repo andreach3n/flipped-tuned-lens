@@ -27,7 +27,7 @@ MODEL_NAME  = "google/gemma-2-2b"
 N_TOKENS    = 1_000_000     # tokens to scan for top activations (small -> fast)
 TOPK        = 20          # top activating examples to show
 WINDOW      = 8           # context tokens on each side
-SHOW_LOGITS = False        # load the model's unembedding for logit effects (~5 GB, ~30 s)
+SHOW_LOGITS = True        # load the model's unembedding for logit effects (~5 GB, ~30 s)
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
