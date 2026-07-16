@@ -25,16 +25,27 @@ import time
 
 from openai import OpenAI
 
+try:                       # optional: load OPENAI_API_KEY from a .env file if present
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 BASE = os.path.dirname(os.path.abspath(__file__))
 BLIND = os.path.join(BASE, "judge_blind.json")
-RATINGS = os.path.join(BASE, "judge_ratings.json")
-BATCH_ID_FILE = os.path.join(BASE, "judge_batch_id.txt")
-BATCH_INPUT = os.path.join(BASE, "judge_batch_input.jsonl")
-
 MODEL = os.environ.get("OPENAI_JUDGE_MODEL", "gpt-5.6-terra")
 EX_PER_BLOCK = int(os.environ.get("EX_PER_BLOCK", 10))   # examples shown per block (blind file has 12)
 REASONING = os.environ.get("REASONING", "low")           # low|minimal|medium|high|none
 MAX_OUT = int(os.environ.get("MAX_OUT", 3000))           # cap (reasoning tokens count against this)
+# Optional strong-judge robustness run: judge only a seeded, SAE-balanced SUBSET.
+# Same SUBSET_SEED -> identical features across model/reasoning configs, so the ratings
+# are directly comparable to the full terra/low run. Output files are auto-tagged.
+SUBSET_N = int(os.environ.get("SUBSET_N", 0))            # 0 = all; e.g. 300 = 100 per SAE
+SUBSET_SEED = int(os.environ.get("SUBSET_SEED", 0))
+_sfx = f"_{MODEL.replace('.', '').replace('-', '')}_{REASONING}_sub{SUBSET_N}" if SUBSET_N else ""
+RATINGS = os.path.join(BASE, f"judge_ratings{_sfx}.json")
+BATCH_ID_FILE = os.path.join(BASE, f"judge_batch_id{_sfx}.txt")
+BATCH_INPUT = os.path.join(BASE, f"judge_batch_input{_sfx}.jsonl")
 
 # $/token (input, output); Batch API is 50% off both directions.
 PRICES = {
@@ -116,7 +127,22 @@ def req_body(feat):
 
 def load_features():
     with open(BLIND) as f:
-        return json.load(f)
+        feats = json.load(f)
+    if SUBSET_N:                       # seeded, SAE-balanced subset for the robustness run
+        import random
+        with open(os.path.join(BASE, "judge_key.json")) as fh:
+            key = json.load(fh)
+        by_sae = {}
+        for x in feats:
+            by_sae.setdefault(key[x["id"]]["sae"], []).append(x)
+        per = SUBSET_N // len(by_sae)
+        rng = random.Random(SUBSET_SEED)
+        pick = set()
+        for s in sorted(by_sae):
+            lst = sorted(by_sae[s], key=lambda x: x["id"])     # deterministic pool
+            pick.update(x["id"] for x in rng.sample(lst, min(per, len(lst))))
+        feats = [x for x in feats if x["id"] in pick]          # keep blind shuffle order
+    return feats
 
 
 # ------------------------------------------------------------------ estimate
@@ -212,6 +238,25 @@ def collect():
     print(f"wrote {len(out)} ratings ({errs} unusable) -> {RATINGS}")
 
 
+def pilot():
+    """Rate a few features and PRINT the full ratings, joined to their true SAE
+    (via judge_key.json — for our inspection only; the model call is still blind).
+    Use this to eyeball judge quality before committing to the full batch."""
+    feats = load_features()
+    with open(os.path.join(BASE, "judge_key.json")) as fh:
+        key = json.load(fh)
+    client = OpenAI()
+    n = int(os.environ.get("N_PILOT", 6))
+    for f in feats[:n]:
+        r = client.chat.completions.create(**req_body(f))
+        v = json.loads(r.choices[0].message.content)
+        k = key[f["id"]]
+        print(f"\n{f['id']}  [{k['sae']} #{k['feat']}  {k['freq_bin']}]  \"{v['label']}\"")
+        print(f"  peak    : breadth {v['peak_breadth']}  coherence {v['peak_coherence']}  abstract {v['peak_abstractness']}")
+        print(f"  typical : breadth {v['typical_breadth']}  coherence {v['typical_coherence']}  abstract {v['typical_abstractness']}")
+        print(f"  → {v['rationale']}")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "estimate"
-    {"estimate": estimate, "submit": submit, "collect": collect}[cmd]()
+    {"estimate": estimate, "pilot": pilot, "submit": submit, "collect": collect}[cmd]()

@@ -9,7 +9,9 @@ Run this instead of re-running the full 4M eval; feature selection reads the
 per-feature stats saved by eval_trivial.py (stats_*.pt).
 """
 import glob
+import json
 import os
+import sys
 import torch as t
 from transformers import AutoTokenizer
 from sae_lens import BatchTopKTrainingSAE, BatchTopKTrainingSAEConfig
@@ -18,6 +20,7 @@ CACHE_DIR   = "/workspace/sae_cache_layer13"
 FULL_PATH   = f"{CACHE_DIR}/sae_full_final.pt"
 RESID_PATH  = f"{CACHE_DIR}/sae_resid_final.pt"
 HYBRID_PATH = f"{CACHE_DIR}/sae_hybrid_final.pt"
+OUTBIAS_PATH = f"{CACHE_DIR}/sae_outbias_k64_final.pt"
 P_PATH      = f"{CACHE_DIR}/P.pt"
 P_HYBRID_PATH = f"{CACHE_DIR}/P_hybrid.pt"
 MODEL_NAME  = "google/gemma-2-2b"
@@ -44,12 +47,17 @@ sae_resid, scale_resid = load_sae(RESID_PATH)
 HAVE_HYBRID = os.path.exists(HYBRID_PATH) and P_hybrid is not None
 if HAVE_HYBRID:
     sae_hybrid, scale_hybrid = load_sae(HYBRID_PATH)
+# outbias: encoder sees the full h (trained map added only at the output), so it ENCODES like full
+HAVE_OUTBIAS = os.path.exists(OUTBIAS_PATH)
+if HAVE_OUTBIAS:
+    sae_outbias, scale_outbias = load_sae(OUTBIAS_PATH)
 
 def sae_input(hh, tt, mode):
-    """The activation the SAE encodes, per mode: full=h, resid=h-P (frozen), hybrid=h-P_hybrid (trained)."""
+    """The activation the SAE encodes, per mode: full=h, resid=h-P (frozen),
+    hybrid=h-P_hybrid (trained), outbias=h (encoder sees full h; map only at output)."""
     if mode == "resid":  return hh - P[tt]
     if mode == "hybrid": return hh - P_hybrid[tt]
-    return hh
+    return hh   # full and outbias both encode the raw activation h
 
 # Unembedding for logit effects (optional). Direct logit attribution: W_dec[f] @ W_U.
 W_U = None
@@ -248,6 +256,9 @@ _STATS = {"full": f"{CACHE_DIR}/stats_full.pt", "resid": f"{CACHE_DIR}/stats_res
 if HAVE_HYBRID:
     _SAES["hybrid"]  = (sae_hybrid, scale_hybrid)
     _STATS["hybrid"] = f"{CACHE_DIR}/stats_hybrid.pt"
+if HAVE_OUTBIAS:
+    _SAES["outbias"]  = (sae_outbias, scale_outbias)
+    _STATS["outbias"] = f"{CACHE_DIR}/stats_outbias.pt"
 
 def matched_pairs(src, tgt, n=100, n_tokens=2_000_000, min_occ=50, show_rows=False):
     """Sample single-token features from `src` SAE, find each's counterpart in `tgt` SAE, and
@@ -355,5 +366,39 @@ CONCEPTS = [
     [" election", " elections"],     # semantic
     [" climate"],                    # semantic / abstract
 ]
-for _concept in CONCEPTS:
-    compare_concept(_concept)
+# ================= inspect a feature alongside how the JUDGE rated it =================
+_JDIR = os.path.dirname(os.path.abspath(__file__))
+
+def show_judged(sae, feat, n_tokens=1_000_000):
+    """Print the LLM judge's rating for this feature (from judge_ratings.json), then the
+    full dashboard + activation-strength bins, so you can compare the verdict to the evidence.
+    Set SHOW_LOGITS=True above for the logit effects (which tokens the feature promotes) —
+    an independent abstractness tell: surface features promote the token itself, concepts
+    promote semantically-related tokens."""
+    kp, rp = os.path.join(_JDIR, "judge_key.json"), os.path.join(_JDIR, "judge_ratings.json")
+    if os.path.exists(kp) and os.path.exists(rp):
+        key, ratings = json.load(open(kp)), json.load(open(rp))
+        aid = next((a for a, m in key.items() if m["sae"] == sae and m["feat"] == feat), None)
+        if aid and aid in ratings:
+            r = ratings[aid]
+            print(f"\n{'#' * 72}\n### JUDGE  {sae} #{feat}  (anon {aid}):  \"{r['label']}\"")
+            print(f"  peak    : breadth {r['peak_breadth']} coherence {r['peak_coherence']} abstract {r['peak_abstractness']}")
+            print(f"  typical : breadth {r['typical_breadth']} coherence {r['typical_coherence']} abstract {r['typical_abstractness']}")
+            print(f"  -> {r['rationale']}\n{'#' * 72}")
+        else:
+            print(f"(no judge rating on file for {sae} #{feat})")
+    else:
+        print("(judge_key.json / judge_ratings.json not found next to dashboard.py — dashboard only)")
+    sae_obj, scale = _SAES[sae]
+    dashboard(sae_obj, scale, sae, [feat], n_tokens=n_tokens)
+    binned_dashboard(sae_obj, scale, sae, [feat], n_tokens=n_tokens)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:          # e.g. python dashboard.py hybrid:577 full:8765 outbias:2297
+        for tok in sys.argv[1:]:
+            s, f = tok.split(":")
+            show_judged(s, int(f))
+    else:                          # bare run -> the original concept comparison
+        for _concept in CONCEPTS:
+            compare_concept(_concept)
