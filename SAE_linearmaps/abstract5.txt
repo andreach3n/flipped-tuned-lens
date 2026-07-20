@@ -1,0 +1,318 @@
+Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s]Loading checkpoint shards:  33%|███▎      | 1/3 [00:08<00:16,  8.48s/it]Loading checkpoint shards:  67%|██████▋   | 2/3 [00:19<00:09,  9.88s/it]Loading checkpoint shards: 100%|██████████| 3/3 [00:20<00:00,  5.84s/it]Loading checkpoint shards: 100%|██████████| 3/3 [00:20<00:00,  6.79s/it]
+Loaded pretrained model google/gemma-2-2b into HookedTransformer
+Moving model to device:  cuda
+
+########################################################################
+### JUDGE  full #7343  (anon F0336):  "Formal institutional reporting language"
+  peak    : breadth 5 coherence 3 abstract 5
+  typical : breadth 5 coherence 2 abstract 4
+  -> Peak examples span many different words but mostly occur in formal news, corporate, police, or official-statement prose; typical activations are much more varied and only weakly retain that institutional/reporting-register pattern.
+########################################################################
+
+========================================================================
+### full feature 7343 ###
+firing rate: 9180/1000367 (0.918%)
+activation: min 1.03 | median 1.66 | p90 3.30 | max 7.80
+  histogram (nonzero activations):
+       1.03 | ######################################## 4820
+       1.71 | ################# 2076
+       2.38 | ######### 1119
+       3.06 | ##### 624
+       3.74 | ## 322
+       4.42 | # 141
+       5.09 |  55
+       5.77 |  17
+       6.45 |  5
+       7.13 |  1
+  promotes:  [' pleaſure', ' ſtate', ' fubject', ' myſelf', ' reaſon', ' cauſe', ' purpoſe', ' itſelf', ' raiſ', 'ſelves']
+  suppresses: [' huge', 'p', ' big', ' p', ' weird', 'huge', ' busted', ' vanished', ' massive', 'weird']
+  top activating examples:
+    [   7.8] ... Jack's was recently made aware of an audio tape recording posted on social media,...  <<' an'>>
+    [   7.0] ... it was disclosed and reported to the appropriate authorities. We take every allegation of abuse seriously...  <<' authorities'>>
+    [   6.9] ... risk to users:
+
+“It appears that an unauthorised 3rd party developer created...  <<' that'>>
+    [   6.5] .... We have received and reviewed the OSHA citations. We have initiated the appeal process as...  <<' citations'>>
+    [   6.5] ... follow. Jack's was recently made aware of an audio tape recording posted on social...  <<' aware'>>
+    [   6.5] ... The employee allegedly involved in this incident was terminated several days ago for unrelated reasons and no...  <<' terminated'>>
+    [   6.4] ...We are investigating reports of a new tool that allegedly captures a Skype user’s last...  <<' that'>>
+    [   6.4] .... Jack's was recently made aware of an audio tape recording posted on social media...  <<' of'>>
+    [   6.3] ...“LPL is pleased to have settled this matter following inquiries in which we cooperated fully...  <<' this'>>
+    [   6.3] ... data very seriously. We are currently investigating these reports. More information will follow as soon...  <<' these'>>
+    [   6.3] ... “We appreciate his support but a scheduling issue came up.”
+
+Chong later took to...  <<' issue'>>
+    [   6.3] ... to users:
+
+“It appears that an unauthorised 3rd party developer created an...  <<' an'>>
+    [   6.2] ...initial information was inadvertently provided to some media sources”. CBS then retracted their original story....  <<' sources'>>
+    [   6.2] ... standards. The employee allegedly involved in this incident was terminated several days ago for unrelated reasons...  <<' incident'>>
+    [   6.1] ... years after his resignation and departure as senior pastor. We learned of this report after it...  <<' pastor'>>
+    [   6.1] ... after it was disclosed and reported to the appropriate authorities. We take every allegation of abuse...  <<' appropriate'>>
+    [   6.1] ... Skype spokesperson:
+
+“We are investigating reports of a new tool that allegedly captures a...  <<' reports'>>
+    [   6.1] ... members must follow. Jack's was recently made aware of an audio tape recording posted...  <<' recently'>>
+    [   6.1] ... audio tape recording posted on social media, which allegedly claims that an employee at a restaurant...  <<' which'>>
+    [   6.0] ... against Bob Coy years after his resignation and departure as senior pastor. We learned of this...  <<' departure'>>
+
+### full feature 7343  (9180 activations) ===
+  bin 0 act[  2.6-  7.8] n=1836   modal 0.05  distinct 747  e.g. [' an', ' authorities', ' that', ' citations', ' aware', ' terminated']
+  bin 1 act[  1.9-  2.6] n=1836   modal 0.06  distinct 792  e.g. [' analyze', ' possible', ' to', ' to', ' changes', ' ‘']
+  bin 2 act[  1.5-  1.9] n=1836   modal 0.07  distinct 813  e.g. ['0', ' to', '.', ' safe', ' arrested', ' made']
+  bin 3 act[  1.2-  1.5] n=1836   modal 0.07  distinct 824  e.g. ['await', ' teams', ' schools', ' killed', ' of', ' and']
+  bin 4 act[  1.0-  1.2] n=1836   modal 0.06  distinct 802  e.g. [',', ' the', ' they', ' them', 'stop', ' our']
+
+########################################################################
+### JUDGE  outbias #2969  (anon F0394):  "Negative sentiment and pessimism"
+  peak    : breadth 3 coherence 4 abstract 5
+  typical : breadth 5 coherence 1 abstract 1
+  -> Peak activations cluster strongly around pessimism, sadness, negativity, and “doom and gloom,” though one “worst thing ... shown” example is less direct; typical activations are highly heterogeneous and show no reliable shared semantic pattern.
+########################################################################
+
+========================================================================
+### outbias feature 2969 ###
+firing rate: 6079/1000367 (0.608%)
+activation: min 1.00 | median 1.39 | p90 2.43 | max 10.07
+  histogram (nonzero activations):
+       1.00 | ######################################## 4804
+       1.91 | ####### 913
+       2.82 | # 230
+       3.72 |  80
+       4.63 |  33
+       5.54 |  11
+       6.44 |  4
+       7.35 |  1
+       8.26 |  2
+       9.16 |  1
+  promotes:  [' negativity', ' negativ', ' negative', ' pessimism', ' negatives', 'RegressionTest', ' Negative', 'negative', ' negatively', ' NEGATIVE']
+  suppresses: ['idazole', 'posterous', 'tracing', 'onsor', '炙', ' alia', 'tida', 'CASCADE', ' Her', '交付']
+  top activating examples:
+    [  10.1] ...The moral of the story? The pessimist always wants more, the optimist...  <<'sim'>>
+    [   9.1] ... and tell visitors that its not all about sadness. The idea is to turn it into...  <<' sadness'>>
+    [   9.0] ... called “a cesspool of ignorance and negativity”:
+
+But then there’s also...  <<' negativity'>>
+    [   8.0] ... and spiteful. Not only is that negativity unwarranted, the position of the complaint is...  <<' negativity'>>
+    [   7.3] ... layoffs, seasonally adjustedThe economic pessimists are winning the argument in the U....  <<'ists'>>
+    [   7.1] ... cap-and-Despite all the bad press and the endless predictions of potential problems,...  <<' press'>>
+    [   6.8] ... Instead of goods, capitalism delivers the bads.
+
+A second key insight emerges from...  <<'s'>>
+    [   6.6] ... before the speech was heard? Their fault finding never has a fix.As the UK...  <<' finding'>>
+    [   6.2] ...’s been a lot more “lose” both recently and historically) the fans there...  <<'”'>>
+    [   6.0] ... age, Baby Boomers are more downbeat than other age groups about the trajectory of...  <<'beat'>>
+    [   5.9] ... the law, is intended to highlight unpopular aspects of the landmark bill as the presidential campaign...  <<' aspects'>>
+    [   5.9] ..., "I can't believe the negative replies."
+
+Wisconsinites Aren't...  <<' negative'>>
+    [   5.8] ... our community, preaching a faith built on fear, teaching that a quest for learning and...  <<' fear'>>
+    [   5.7] ... me they seemed to be depicted as the negative subconscious thoughts that tend to plague humans....  <<' negative'>>
+    [   5.7] ... to plague humans. That voice that encourages defeat and lack of confidence when life seems to...  <<' defeat'>>
+    [   5.7] ...-right.”
+
+But the focus on division and bigotry can obscure views that most Americans...  <<' division'>>
+    [   5.7] ... one says, ‘My glass is half empty, time for another one.’ The second...  <<' empty'>>
+    [   5.6] ... any cap-and-Despite all the bad press and the endless predictions of potential problems...  <<' bad'>>
+    [   5.6] ... moral of the story? The pessimist always wants more, the optimist is...  <<'ist'>>
+    [   5.4] ... and unarguably to the ugliest aspects of racism in this country. Asking why...  <<' aspects'>>
+
+### outbias feature 2969  (6079 activations) ===
+  bin 0 act[  1.9- 10.1] n=1216   modal 0.06  distinct 636  e.g. ['sim', ' sadness', ' negativity', ' negativity', 'ists', ' press']
+  bin 1 act[  1.5-  1.9] n=1216   modal 0.08  distinct 655  e.g. ['vic', ' violence', ' feature', ' every', 'based', 't']
+  bin 2 act[  1.3-  1.5] n=1216   modal 0.07  distinct 654  e.g. [':', ' and', '.', ' doesn', 're', ' snow']
+  bin 3 act[  1.1-  1.3] n=1216   modal 0.07  distinct 624  e.g. [' Lots', 'Turbul', ' abuse', ' failures', ' violence', '”']
+  bin 4 act[  1.0-  1.1] n=1215   modal 0.07  distinct 639  e.g. [' always', ' cream', 'number', ' as', ' plenty', ' plague']
+
+########################################################################
+### JUDGE  outbias #15673  (anon F1130):  "Oddness and unusualness"
+  peak    : breadth 3 coherence 5 abstract 5
+  typical : breadth 4 coherence 3 abstract 5
+  -> Peak activations tightly target words framing events or situations as odd, strange, peculiar, unusual, or bizarre; typical activations mostly extend to noteworthy or surprising descriptions but include several weak unrelated-looking hits.
+########################################################################
+
+========================================================================
+### outbias feature 15673 ###
+firing rate: 4413/1000367 (0.441%)
+activation: min 1.01 | median 1.52 | p90 3.58 | max 12.65
+  histogram (nonzero activations):
+       1.01 | ######################################## 3273
+       2.18 | ####### 638
+       3.34 | ## 242
+       4.50 | # 138
+       5.67 |  53
+       6.83 |  28
+       8.00 |  24
+       9.16 |  8
+      10.32 |  7
+      11.49 |  2
+  promotes:  [' weirdly', ' strangely', ' bizarre', ' oddly', ' strange', ' weird', 'strange', 'rungsseite', ' étrange', 'Weird']
+  suppresses: ['koľvek', 'стоин', ' maksimum', ' decisively', ' Clarissa', ' apporte', '่านั้น', ' homomorphism', 'ToScroll', ' poplar']
+  top activating examples:
+    [  12.6] ...pholes in the current system have fostered a strange breed of companies. They don't...  <<' strange'>>
+    [  11.5] ... all things American - baseball.
+
+This odd journey, especially the inception, involved numerous...  <<' odd'>>
+    [  11.4] ... three household names find themselves part of an odd phenomenon that is rocking baseball this season,...  <<' odd'>>
+    [  11.4] ... "hazardous conditions." That's an odd verdict: In 10 years of...  <<' odd'>>
+    [  11.3] ..., 2003. Uniquely, for an unexpected death such as his...  <<'quely'>>
+    [  10.5] ... was shocked and scared when he received the curious letter.
+
+It was stapled to...  <<' curious'>>
+    [  10.4] ...
+
+The Huffington Post reported:
+
+An unusual coalition of activists and organizations have united in...  <<' unusual'>>
+    [  10.4] ... 2003. Uniquely, for an unexpected death such as his,...  <<','>>
+    [  10.3] ... Cyprus is high. It also has some unusual characteristics — the country has the highest percentage...  <<' unusual'>>
+    [  10.1] ... head correctly. Nuraphones have an unusual configuration that we'll get into later...  <<' unusual'>>
+    [  10.1] ... Gatland.
+
+It will be a strange day for O'Sullivan on an already...  <<' strange'>>
+    [   9.6] .... Daniel Bryan/Cody Rhodes – Oddly enough, I found Bryan and Cody worked...  <<'ly'>>
+    [   9.5] ... about that. That’s a really bizarre way to spend your money,” said Obama...  <<' bizarre'>>
+    [   9.5] ...-kind even to this day. Strangely, Microsoft has yet to announce a second...  <<'ely'>>
+    [   9.4] ..., but it’s kind of an oddball. That’s because most transfer...  <<' odd'>>
+    [   9.4] ... this particular aspect, which seems a bit strange, considering he was the same judge who...  <<' strange'>>
+    [   9.3] ... may be.
+
+It's another odd turn in a relationship that didn't...  <<' odd'>>
+    [   9.0] ... vs. Daniel Bryan/Cody Rhodes – Oddly enough, I found Bryan and Cody...  <<' Odd'>>
+    [   9.0] ... Riverside. “It’s an unusual situation where insects can overcome those defenses.” At...  <<' situation'>>
+    [   9.0] ... Hugh Freeze stepping down and how "bizarre" the timing is. (1:...  <<'izarre'>>
+
+### outbias feature 15673  (4413 activations) ===
+  bin 0 act[  2.5- 12.6] n=883    modal 0.05  distinct 313  e.g. [' strange', ' odd', ' odd', ' odd', 'quely', ' curious']
+  bin 1 act[  1.7-  2.5] n=883    modal 0.06  distinct 398  e.g. [' of', ' that', '.', ' that', 'rat', ' special']
+  bin 2 act[  1.4-  1.7] n=883    modal 0.07  distinct 387  e.g. [' reasons', ' I', ' time', ' rare', ' fact', ' the']
+  bin 3 act[  1.2-  1.4] n=883    modal 0.06  distinct 418  e.g. [' career', '.', "'", ' there', ' insane', ' station']
+  bin 4 act[  1.0-  1.2] n=881    modal 0.06  distinct 432  e.g. [' about', ' on', ' a', ' ', ',', ' geological']
+
+########################################################################
+### JUDGE  full #12264  (anon F1320):  "Elevated formal vocabulary"
+  peak    : breadth 4 coherence 4 abstract 5
+  typical : breadth 5 coherence 3 abstract 5
+  -> Peak activations are diverse but consistently favor unusually formal, literary, or Latinate diction (e.g. “surmounted,” “commence,” “forbearance,” “elucidate”); typical firings remain broadly elevated vocabulary, though with a somewhat looser stylistic consistency.
+########################################################################
+
+========================================================================
+### full feature 12264 ###
+firing rate: 25996/1000367 (2.599%)
+activation: min 1.02 | median 1.83 | p90 3.49 | max 7.21
+  histogram (nonzero activations):
+       1.02 | ######################################## 10611
+       1.64 | ######################## 6586
+       2.26 | ############## 3911
+       2.88 | ######## 2318
+       3.50 | ##### 1347
+       4.12 | ## 691
+       4.73 | # 343
+       5.35 |  130
+       5.97 |  47
+       6.59 |  12
+  promotes:  [')");\r', '()]\r', ' myſelf', '}}}\r', '*/;', ')";\r', ']`', ' enfans', "')],", '.}(']
+  suppresses: ['-', ' ', '1', '<h2>', 'D', 'girls', '?', '2', ' girls', 'p']
+  top activating examples:
+    [   7.2] ... this complex situation remains high.
+
+A copious amount of moisture will unload very heavy rainfall...  <<' copious'>>
+    [   7.2] ... for the American Dream but have had the forbearance to pursue it through appropriate means.
+
+...  <<' forbearance'>>
+    [   7.1] ... at all. But there are two more salient takeaways from the data. First, it...  <<' salient'>>
+    [   7.0] ... prevention.Mark Schlabach discusses what transpired at Ole Miss that led to Hugh Freeze...  <<' transpired'>>
+    [   6.9] ... rendering using drawImage. This style is akin to the way Core Animation works in Apple...  <<' akin'>>
+    [   6.8] ... glow to the Doctor and Ditzy, emanating from the TARDIS interior.--Doctor...  <<' emanating'>>
+    [   6.8] ... and the former Tokyo Higher School, which thenceforth assumed the duty of teaching first-...  <<' thence'>>
+    [   6.8] ... challenging even though Wario can't perish.
+
+This is a pretty long game...  <<' perish'>>
+    [   6.7] ... this on a daily basis, and I concur.)
+
+I believe in love. I...  <<' concur'>>
+    [   6.7] ... happening with LGBT — like nearly all things pertaining to lesbian, gay, bisexual and transgender...  <<' pertaining'>>
+    [   6.7] ... state paralysis”? (But unless someone is privy to the inner thoughts of Trump, we...  <<' privy'>>
+    [   6.6] ... unearthed in Göbeklitepe could be construed as the first pictograph because it depicts...  <<' construed'>>
+    [   6.6] ... Kuala Lumpur. The missing plane continued to perplex investigators from around the globe three days later...  <<' perplex'>>
+    [   6.5] ... gingerbread men on the label. (Albeit this time, one of them dismembered...  <<'beit'>>
+    [   6.5] ... more traditional superheroes. Also a movie would necessitate some sort of a big threat, which...  <<' necessitate'>>
+    [   6.4] ... he decides to go back to Earth, relinquishing his powers. He tries to live...  <<' relinqu'>>
+    [   6.4] ... of the sport grows
+
+• eventually become ardent fans
+
+• are among 24...  <<' ardent'>>
+    [   6.4] ...The expanding domain of user experience and its myriad disciplines will push the title ‘UX designer...  <<' myriad'>>
+    [   6.4] ... define the Republican party. President Obama has wrought this havoc, not the GOP, who...  <<' wrought'>>
+    [   6.4] ... Tata Nanos. Then charging punters inordinate amounts of money (its tinkered Nano...  <<'ordinate'>>
+
+### full feature 12264  (25996 activations) ===
+  bin 0 act[  2.8-  7.2] n=5200   modal 0.01  distinct 2662 e.g. [' copious', ' forbearance', ' salient', ' transpired', ' akin', ' emanating']
+  bin 1 act[  2.1-  2.8] n=5200   modal 0.00  distinct 2964 e.g. [' collectively', ' essence', ' essence', ' championed', 'ated', ' escorted']
+  bin 2 act[  1.6-  2.1] n=5200   modal 0.00  distinct 3082 e.g. [' reiterated', ' various', ' minced', ' recipients', ' captive', ' shaggy']
+  bin 3 act[  1.3-  1.6] n=5200   modal 0.01  distinct 3159 e.g. [' cast', ' contest', ' hastily', ' imperial', 'led', ' corporations']
+  bin 4 act[  1.0-  1.3] n=5196   modal 0.02  distinct 3157 e.g. [' bandwagon', ' rewind', ' remained', ' departures', ' splen', ' else']
+
+########################################################################
+### JUDGE  full #9455  (anon F2691):  "Future likelihood and prediction"
+  peak    : breadth 3 coherence 5 abstract 5
+  typical : breadth 4 coherence 4 abstract 4
+  -> Peak examples tightly mark expected, likely, or unsurprising future outcomes, while typical examples more broadly include modal and prospective-risk constructions with a somewhat weaker shared predictive theme.
+########################################################################
+
+========================================================================
+### full feature 9455 ###
+firing rate: 9188/1000367 (0.918%)
+activation: min 1.02 | median 1.68 | p90 3.28 | max 7.99
+  histogram (nonzero activations):
+       1.02 | ######################################## 4758
+       1.72 | ################## 2223
+       2.42 | ######### 1102
+       3.11 | #### 573
+       3.81 | ## 274
+       4.51 | # 136
+       5.20 |  70
+       5.90 |  31
+       6.59 |  16
+       7.29 |  5
+  promotes:  [' eventually', ' soon', 'DockStyle', ' eventual', 'eventually', 'setVerticalGroup', ' will', ' likely', ' someday', ' Eventually']
+  suppresses: ['Παραπομπές', 'ioutil', '🏻\u200d♀️', 'AGAN', ' reloadData', ' TSI', 'umented', 'BeginContext', '","");', 'AfterViewInit']
+  top activating examples:
+    [   8.0] ... current targets and that each of them will likely appear in the UFC very soon.
+
+...  <<' likely'>>
+    [   7.6] ... Chris McQueen. My mail is that there will be more announcements this week on another two...  <<' will'>>
+    [   7.5] ...cades behind other forms of renewables and will likely need significant government support and research to become...  <<' likely'>>
+    [   7.4] ... Russian businesses.
+
+The tweaked bill will likely receive a full vote on Tuesday and is...  <<' likely'>>
+    [   7.4] ... long haul, and Star Citizen will most likely be the game to look out for this...  <<' likely'>>
+    [   7.1] ...tic monarchies.
+
+Itll likely continue after Trump enters office - instead of...  <<' likely'>>
+    [   7.0] ... they debate the draft directives, which are likely to be watered down in the process....  <<' likely'>>
+    [   7.0] ...’s international push, I’m guessing every team will eventually be tapped to give...  <<' guessing'>>
+    [   7.0] ... have written.
+
+The differences suggest it will be tough to get a final bill to...  <<' will'>>
+    [   6.9] ... main two forwards, and they’ll surely play the same formation after their two wins...  <<' surely'>>
+    [   6.9] ... options. But a) that list will probably filter down again after weigh-in when...  <<' probably'>>
+    [   6.8] ... Investment Partnership (TTIP) negotiations will probably fail, following a major leak of confidential...  <<' probably'>>
+    [   6.8] ... late February. That two month extension will likely reignite the fight between Democrats and Republicans...  <<' likely'>>
+    [   6.8] ... at Hockenheim. He is widely expected to be retained by the French squad....  <<' expected'>>
+    [   6.7] ...-sponsored executions.”
+
+The bill is likely to go nowhere outside Feingold’...  <<' likely'>>
+    [   6.7] ...-long association with the Baltimore Orioles and likely precipitating a further overhaul by Atlanta....  <<' likely'>>
+    [   6.7] ... of Raqqa, it’s likely these new US troops will be taking part...  <<' likely'>>
+    [   6.7] ... the two directives to take effect. Officials expect fierce disagreements among member states and MEPs...  <<' expect'>>
+    [   6.6] ... small, and that Obama and Congress are likely to work out a compromise ahead of time...  <<' likely'>>
+    [   6.6] ... fellow surgeon Boaz Arzi said they anticipate that Kabang will need at least two...  <<' anticipate'>>
+
+### full feature 9455  (9188 activations) ===
+  bin 0 act[  2.6-  8.0] n=1838   modal 0.10  distinct 307  e.g. [' likely', ' will', ' likely', ' likely', ' likely', ' likely']
+  bin 1 act[  1.9-  2.6] n=1838   modal 0.09  distinct 450  e.g. ['ll', 'll', ' up', ' might', ' that', ' see']
+  bin 2 act[  1.5-  1.9] n=1838   modal 0.07  distinct 520  e.g. [' there', ' be', ' see', ' make', ' him', ' to']
+  bin 3 act[  1.2-  1.5] n=1838   modal 0.08  distinct 535  e.g. [' and', ' warned', ' make', ' presidential', '1', ' into']
+  bin 4 act[  1.0-  1.2] n=1836   modal 0.07  distinct 583  e.g. [' global', ' before', ' be', ' could', ' someday', 'll']

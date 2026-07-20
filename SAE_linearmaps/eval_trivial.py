@@ -250,12 +250,17 @@ if HAVE_OUTBIAS:
 
 # --- save per-feature stats so dashboard.py can pick features without re-running the 4M eval ---
 # "nd" = WEIGHTED (activation-weighted) distinct-word count [the principled metric]; "nd_peak" = old peak metric
-t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "nd_peak": triviality(peak_full, freq_full)[1].cpu(),  "alive": al_full.cpu()},  f"{CACHE_DIR}/stats_full.pt")
-t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "nd_peak": triviality(peak_resid, freq_resid)[1].cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
+# "eff"/"eff_peak" = effective #words = exp(entropy) on the WEIGHTED / PEAK sample [breadth metric for the LLM-judge analysis]
+t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "nd_peak": triviality(peak_full, freq_full)[1].cpu(),
+        "eff": eff_words(wt_full).cpu(),  "eff_peak": eff_words(peak_full).cpu(),  "alive": al_full.cpu()},  f"{CACHE_DIR}/stats_full.pt")
+t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "nd_peak": triviality(peak_resid, freq_resid)[1].cpu(),
+        "eff": eff_words(wt_resid).cpu(), "eff_peak": eff_words(peak_resid).cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
 if HAVE_HYBRID:
-    t.save({"freq": freq_hyb.cpu(), "nd": nd_hyb.cpu(), "nd_peak": triviality(peak_hyb, freq_hyb)[1].cpu(), "alive": al_hyb.cpu()}, f"{CACHE_DIR}/stats_hybrid.pt")
+    t.save({"freq": freq_hyb.cpu(), "nd": nd_hyb.cpu(), "nd_peak": triviality(peak_hyb, freq_hyb)[1].cpu(),
+            "eff": eff_words(wt_hyb).cpu(), "eff_peak": eff_words(peak_hyb).cpu(), "alive": al_hyb.cpu()}, f"{CACHE_DIR}/stats_hybrid.pt")
 if HAVE_OUTBIAS:
-    t.save({"freq": freq_ob.cpu(), "nd": nd_ob.cpu(), "nd_peak": triviality(peak_ob, freq_ob)[1].cpu(), "alive": al_ob.cpu()}, f"{CACHE_DIR}/stats_outbias.pt")
+    t.save({"freq": freq_ob.cpu(), "nd": nd_ob.cpu(), "nd_peak": triviality(peak_ob, freq_ob)[1].cpu(),
+            "eff": eff_words(wt_ob).cpu(), "eff_peak": eff_words(peak_ob).cpu(), "alive": al_ob.cpu()}, f"{CACHE_DIR}/stats_outbias.pt")
 print(f"\nsaved per-feature stats to {CACHE_DIR}/stats_*.pt")
 
 # --- distribution plot: is "single-word fraction" just a thresholding artifact? -------------

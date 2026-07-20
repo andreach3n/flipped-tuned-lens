@@ -55,15 +55,23 @@ def ztest(x, y):
 
 
 # ---- stats to stdout --------------------------------------------------------
+# abstractness == 0 means "no coherent pattern" (N/A), NOT "less abstract than 1".
+# Exclude those from abstractness means/tests; report them separately as incoherent %.
+def axis_vals(s, b, a):
+    x = vals[s][b][a]
+    return x[x > 0] if a == "abstractness" else x
+
 for b in BLOCKS:
     print(f"\n===== {b.upper()} block — mean [95% CI] =====")
     for a in AXES:
-        cells = "  ".join(f"{s} {vals[s][b][a].mean():.2f}±{mean_ci(vals[s][b][a])[1]:.2f}" for s in SAES)
+        cells = "  ".join(f"{s} {axis_vals(s, b, a).mean():.2f}±{mean_ci(axis_vals(s, b, a))[1]:.2f}" for s in SAES)
         print(f"  {a:13} {cells}")
+    inc = "  ".join(f"{s} {100 * (vals[s][b]['abstractness'] == 0).mean():.0f}%" for s in SAES)
+    print(f"  {'incoherent':13} {inc}   (abstractness=0; excluded from the abstractness mean above)")
     print(f"  -- differences vs FULL ({b}) --")
     for a in AXES:
         for s in ("hybrid", "outbias"):
-            d, z, p = ztest(vals[s][b][a], vals["full"][b][a])
+            d, z, p = ztest(axis_vals(s, b, a), axis_vals("full", b, a))
             sig = "SIG" if p < 0.05 else "ns "
             print(f"     {a:13} {s:8} Δ={d:+.2f}  z={z:+5.1f}  p={p:.1e}  [{sig}]")
 
@@ -85,8 +93,8 @@ def grouped(ax, groups, series_vals, series_err=None, ylabel="", labels=None):
 
 fig, axs = plt.subplots(1, 2, figsize=(11, 4.3), sharey=True)
 for ax, b in zip(axs, BLOCKS):
-    m = {s: [vals[s][b][a].mean() for a in AXES] for s in SAES}
-    e = {s: [mean_ci(vals[s][b][a])[1] for a in AXES] for s in SAES}
+    m = {s: [axis_vals(s, b, a).mean() for a in AXES] for s in SAES}
+    e = {s: [mean_ci(axis_vals(s, b, a))[1] for a in AXES] for s in SAES}
     grouped(ax, AXES, m, e, ylabel="mean rating (1–5)" if b == "peak" else "")
     ax.set_ylim(0, 5); ax.set_title(f"{b} block", fontsize=11)
 axs[0].legend(frameon=False, fontsize=9)
@@ -96,12 +104,12 @@ fig.tight_layout()
 fig.savefig(os.path.join(PLOTS, "judge_axes.png"), dpi=150, bbox_inches="tight")
 
 # ---- figure B: abstractness distribution -----------------------------------
-levels = [1, 2, 3, 4, 5]
+levels = [0, 1, 2, 3, 4, 5]
 fig, axs = plt.subplots(1, 2, figsize=(11, 4.3), sharey=True)
 for ax, b in zip(axs, BLOCKS):
     frac = {s: [100 * (vals[s][b]["abstractness"] == L).mean() for L in levels] for s in SAES}
     grouped(ax, levels, frac, None, ylabel="% of features" if b == "peak" else "",
-            labels=["1\nsurface", "2", "3\ntopic", "4", "5\nabstract"])
+            labels=["0\nnoise", "1\nsurface", "2", "3\ntopic", "4", "5\nabstract"])
     ax.set_title(f"{b} block", fontsize=11)
 axs[0].legend(frameon=False, fontsize=9)
 fig.suptitle("Abstractness rating distribution by SAE (frequency-matched) — distributions overlap",

@@ -1,0 +1,314 @@
+Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s]Loading checkpoint shards:  33%|███▎      | 1/3 [00:00<00:01,  1.38it/s]Loading checkpoint shards:  67%|██████▋   | 2/3 [00:01<00:00,  1.45it/s]Loading checkpoint shards: 100%|██████████| 3/3 [00:01<00:00,  2.10it/s]
+Loaded pretrained model google/gemma-2-2b into HookedTransformer
+Moving model to device:  cuda
+
+########################################################################
+### JUDGE  full #1080  (anon F2829):  "Proper-name and title tokens"
+  peak    : breadth 4 coherence 3 abstract 1
+  typical : breadth 5 coherence 1 abstract 1
+  -> Peak hits are mostly capitalized names of places, sports teams, events, and institutions, whereas the typical sample broadens into heterogeneous titles, brands, fragments, and even an article, suggesting a largely surface-level capitalization/name-token pattern rather than a stable semantic concept.
+########################################################################
+
+========================================================================
+### full feature 1080 ###
+firing rate: 5112/1000367 (0.511%)
+activation: min 1.03 | median 1.44 | p90 2.52 | max 7.59
+  histogram (nonzero activations):
+       1.03 | ######################################## 3404
+       1.68 | ############ 1055
+       2.34 | #### 402
+       3.00 | # 148
+       3.65 |  65
+       4.31 |  24
+       4.97 |  10
+       5.62 |  3
+       6.28 |  0
+       6.93 |  1
+  promotes:  ['\ufeff/*', ' okuyayım', 'arXiv', 'mybatisplus', ' مرئيه', '<bos>', 'yntaxException', '\ufeff/**', '.*")]', ' last']
+  suppresses: [' InputDecoration', '⎩', 'vali', 'urlpatterns', 'واف', ' IconData', '"]="', ' IActionResult', 'orra', ' Tä']
+  top activating examples:
+    [   7.6] ... could ride momentum from an upset victory in Michigan last week to victories in other largeThe...  <<' Michigan'>>
+    [   5.8] ... Ranieri, who had been fired by Juventus months earlier, rescued the team and nearly...  <<' Juventus'>>
+    [   5.8] ...still-embarrassing) failure of Pinkerton by creating an album of emotionless sheen...  <<'erton'>>
+    [   5.7] ... the iron-chinned Roy Nelson in Tokyo in September (https://www.youtube...  <<' Tokyo'>>
+    [   5.5] ... legislation (she backed it on the Finance Committee). Her support is still being courted...  <<' Committee'>>
+    [   5.5] ... take a strong grid position after topping Free Practice 2 earlier in the day but a...  <<' Practice'>>
+    [   5.4] ... they lost to Nottingham Forest in the FA Cup and was their first league loss at Deep...  <<' Cup'>>
+    [   5.3] ... was included in the Republicans’ Medicare drug bill; it was never needed.
+
+Photo...  <<' bill'>>
+    [   5.2] ... subtle movies like the stellar Eagle vs. Shark, Waititi’s next gig...  <<' Shark'>>
+    [   5.2] ... who had taken part in the ITV Wales debate earlier in May - is on holiday....  <<' debate'>>
+    [   5.1] ... of pulling out a late win against the Wildcats, Todd Graham had to make a decision...  <<' Wildcats'>>
+    [   5.1] .... "It was a rough weekend in Boston and it was good to play good tonight...  <<' Boston'>>
+    [   5.1] ... 5 February when they lost to Nottingham Forest in the FA Cup and was their first...  <<' Forest'>>
+    [   5.0] ... by, something they did particularly well against England) might be a better approach than playing...  <<' England'>>
+    [   4.9] ... in My Pants” video from Saturday Night Live. Either way, it was bleep...  <<' Live'>>
+    [   4.9] ... 1996’s Pinkerton, then disappearing entirely for five years....  <<'erton'>>
+    [   4.9] ...014 Expansion Draft from the Boston Breakers. Through two seasons with the Dash,...  <<' Breakers'>>
+    [   4.8] ... strong grid position after topping Free Practice 2 earlier in the day but a collision with...  <<'2'>>
+    [   4.8] ..., which we saw in the match against Toronto. This week could also mark the return...  <<' Toronto'>>
+    [   4.7] ... to the one DeMarcus Ware played in Dallas and in Denver, occasionally dropping back in...  <<' Dallas'>>
+
+### full feature 1080  (5112 activations) ===
+  bin 0 act[  2.0-  7.6] n=1023   modal 0.01  distinct 763  e.g. [' Michigan', ' Juventus', 'erton', ' Tokyo', ' Committee', ' Practice']
+  bin 1 act[  1.6-  2.0] n=1023   modal 0.02  distinct 740  e.g. [' failure', ' topics', '"', ' Department', ' Beta', ' Cyprus']
+  bin 2 act[  1.3-  1.6] n=1023   modal 0.02  distinct 718  e.g. ['0', 'ef', ' Games', ' Awak', ' Coachella', ' Spain']
+  bin 3 act[  1.2-  1.3] n=1023   modal 0.02  distinct 728  e.g. [' and', ' ', ' and', '2', ' fire', ' water']
+  bin 4 act[  1.0-  1.2] n=1020   modal 0.02  distinct 699  e.g. ['ka', ' Niko', ' This', ':', ' clinch', '.']
+
+########################################################################
+### JUDGE  hybrid #10754  (anon F2827):  "Downloaded-paper recommendation template"
+  peak    : breadth 3 coherence 4 abstract 1
+  typical : breadth 5 coherence 1 abstract 1
+  -> Peak activations are dominated by the repeated surface template “Users who downloaded this paper also downloaded these,” while the typical sample contains varied, apparently unrelated low-strength tokens with no clear common theme.
+########################################################################
+
+========================================================================
+### hybrid feature 10754 ###
+firing rate: 94/1000367 (0.009%)
+activation: min 1.55 | median 1.99 | p90 3.19 | max 4.25
+  histogram (nonzero activations):
+       1.55 | ######################################## 37
+       1.82 | #################### 19
+       2.09 | ########## 10
+       2.36 | ######### 9
+       2.63 | ##### 5
+       2.90 | ### 3
+       3.17 | #### 4
+       3.44 | ## 2
+       3.71 | ### 3
+       3.98 | ## 2
+  promotes:  [' myſelf', 'AndEndTag', ' pleaſure', ' Efq', ' Theſe', 'GEBURTS', ' chofe', ' <=",', ' perſon', ' Monfieur']
+  suppresses: [' pre', 'ure', ' more', ' b', ' prior', ' ri', ' long', 'more', ' p', ' region']
+  top activating examples:
+    [   4.2] ... computer workstation and share it with other network users.
+
+Each of these methods has its...  <<' users'>>
+    [   4.1] ...kull in your games of Warhammer 40,000, you will find...  <<'0'>>
+    [   3.9] ... far'
+
+"Turnout didn't decide the election," tweeted Republican Alabama strategist...  <<'t'>>
+    [   3.9] ... auks live, their only seabird competition are cormorants (which are dive...  <<' competition'>>
+    [   3.8] ...."
+
+Fears and anxieties about resuming sex are often numerous: Will it cause another...  <<' sex'>>
+    [   3.6] ... he's great with moving without the ball, but he rarely puts the ball on...  <<' ball'>>
+    [   3.5] ... index to gauge how likely northern lights will be visible at a certain latitude. Northern lights...  <<' be'>>
+    [   3.4] ... they think of Trump. The most popular words were “strong,” “determined,” and...  <<' words'>>
+    [   3.3] ... hot from heat waves, water is less effective as a coolant, and so the power...  <<' effective'>>
+    [   3.2] ... at Microsoft BlogFor unaccompanied minors traveling with American Airlines, parents pay an extra $...  <<' with'>>
+    [   3.2] ... and carters were no longer a pleasant surprise but the way things are; diversity was...  <<' surprise'>>
+    [   3.2] ... Cadillac.
+
+Makes Gaining Popularity Over Time
+
+The following are makes that have been...  <<' Time'>>
+    [   3.0] ... 35.3 percent of his shots have been taken around the basket.
+
+...  <<' shots'>>
+    [   3.0] ... her bailiff seized from a defendant and paid female prostitutes for sex.
+
+Hilary Green...  <<' paid'>>
+    [   2.9] ....
+
+The operation saw US agents lose track of hundreds of illegal guns sold in Arizona...  <<' track'>>
+    [   2.7] ...s corona. When CMEs impact the Earth's magnetosphere, they are responsible...  <<' Earth'>>
+    [   2.7] .... Click to see Here & There looking downtown.
+
+What's going on?...  <<' downtown'>>
+    [   2.7] ... the cheek and hug ME more than my siblings.”
+
+We’ve seen this pattern...  <<' siblings'>>
+    [   2.6] ... free account on Kanopy using your library card, you can stream movies through your computer...  <<' card'>>
+    [   2.6] ... and had six rebounds, which saw him only just get the nod from teammates Luke Hodge...  <<' only'>>
+
+### hybrid feature 10754  (94 activations) ===
+  bin 0 act[  2.6-  4.2] n=19     modal 0.05  distinct 19   e.g. [' users', '0', 't', ' competition', ' sex', ' ball']
+  bin 1 act[  2.1-  2.6] n=19     modal 0.11  distinct 18   e.g. [' only', ' Democrat', '0', ' compassion', 'accompanied', 'accompanied']
+  bin 2 act[  1.8-  2.1] n=19     modal 0.16  distinct 16   e.g. [' holding', ' clock', ' to', ' wanted', 'effort', ' that']
+  bin 3 act[  1.7-  1.8] n=19     modal 0.05  distinct 19   e.g. ['two', ' limitations', ' down', ' online', ' pay', ' Colorado']
+  bin 4 act[  1.5-  1.7] n=18     modal 0.11  distinct 17   e.g. [' the', ' auto', ' to', ' mentor', ' Amp', ' in']
+
+########################################################################
+### JUDGE  full #7842  (anon F2825):  "Capitalized phrase components"
+  peak    : breadth 5 coherence 3 abstract 1
+  typical : breadth 5 coherence 4 abstract 1
+  -> Peak hits are lexically diverse but predominantly capitalize a salient word in a multiword title, label, coined expression, or proper-name-like phrase; typical hits broaden to many unrelated capitalized forms, supporting a surface capitalization/formatting feature rather than a semantic topic.
+########################################################################
+
+========================================================================
+### full feature 7842 ###
+firing rate: 38568/1000367 (3.855%)
+activation: min 1.03 | median 2.64 | p90 5.05 | max 10.06
+  histogram (nonzero activations):
+       1.03 | ######################################## 12523
+       1.93 | ########################## 8341
+       2.83 | ##################### 6743
+       3.74 | ################# 5344
+       4.64 | ########## 3277
+       5.54 | #### 1515
+       6.45 | # 559
+       7.35 |  202
+       8.26 |  52
+       9.16 |  12
+  promotes:  [' Monfieur', ' Majefty', ' myſelf', ' Houſe', ' itſelf', ' Jefus', ' Reſ', 'ſelf', ' themſelves', ' himſelf']
+  suppresses: [')))));', ')"),', 'etheless', "']],", ' חיצוניים', 'parsedMessage', ']$}', 'aarrggbb', ' otomatig', ' autorytatywna']
+  top activating examples:
+    [  10.1] ... entrant worth noting include the trademark Karl Fist Pump at the 2.20 minute...  <<' Pump'>>
+    [   9.9] ... of what investors have dubbed the "Trump Bounce."As President Barack Obama begins his second...  <<' Bounce'>>
+    [   9.7] ... say that you want to use the Retail Classifier to classify a bunch of products descriptions you...  <<' Classifier'>>
+    [   9.6] .... He came up with the Magic Bullet Theory .
+
+. Because the Zapruder...  <<' Theory'>>
+    [   9.5] ...It is a problem inherent in the English Language. In Spanish and French you have the...  <<' Language'>>
+    [   9.4] ... I would like to say that the Proposal Writing course that we are privileged to have at...  <<' Writing'>>
+    [   9.3] ...7-41 for the American Collegiate Record* of 3:35....  <<' Record'>>
+    [   9.2] ... which in recent years has made a Bold Pivot to create Compelling Internet Content for the...  <<' Pivot'>>
+    [   9.2] ... raised $4 million in a Series A Round led by HTC Vive. They are now...  <<' Round'>>
+    [   9.2] ... talk to you a little about the Class Talent system, which is a very important feature...  <<' Talent'>>
+    [   9.2] ...5, CSD was listed on Bittrex Exchange.
+
+Shortly afterwards, Viz drafted the...  <<' Exchange'>>
+    [   9.2] ... the non-exact correlation of the Shire Calendar and our modern Gregorian calendar, it’...  <<' Calendar'>>
+    [   9.2] ...History [ edit ]
+
+The Kilner Jar was originally made by a firm of glass...  <<' Jar'>>
+    [   9.0] ...6 percent who say it is ‘Very Important.' Twenty-five percent consider more information...  <<' Important'>>
+    [   8.9] ...Because this past season, the Designated Player Rule came full circle. The sorts of players...  <<' Rule'>>
+    [   8.9] ... on Friday and the company’s Privacy Policy, which was last updated in April....  <<' Policy'>>
+    [   8.8] ..., NBN Co’s recent Strategic Review (PDF) showed Labor’s version...  <<' Review'>>
+    [   8.8] ... his investigation of the original Reckless Driving Complaint.
+
+Coos Bay Police Department responded...  <<' Complaint'>>
+    [   8.8] ... vegan and sugar-free Very Berry Ice Cream will be on your table in less than...  <<' Cream'>>
+    [   8.8] ... essentials constituting the basic concept of Regenerative Medicine, and are included in the core technology...  <<' Medicine'>>
+
+### full feature 7842  (38568 activations) ===
+  bin 0 act[  4.2- 10.1] n=7714   modal 0.01  distinct 2659 e.g. [' Pump', ' Bounce', ' Classifier', ' Theory', ' Language', ' Writing']
+  bin 1 act[  3.1-  4.2] n=7714   modal 0.01  distinct 2727 e.g. [' Wrong', ' State', ' Team', ' Ask', ' War', ' Informal']
+  bin 2 act[  2.2-  3.1] n=7714   modal 0.01  distinct 2831 e.g. [' County', ' Sparrow', ' E', ' Mass', ' Legislative', ' Off']
+  bin 3 act[  1.5-  2.2] n=7714   modal 0.02  distinct 3002 e.g. [' North', ' Improved', ' Coach', ' College', ' PvP', ' IX']
+  bin 4 act[  1.0-  1.5] n=7712   modal 0.02  distinct 3169 e.g. ['of', ' DB', ' Princess', 'ws', ' Times', ' Sonic']
+
+########################################################################
+### JUDGE  outbias #2934  (anon F2814):  "Heterogeneous token contexts"
+  peak    : breadth 5 coherence 1 abstract 1
+  typical : breadth 5 coherence 1 abstract 1
+  -> Both peak and typical examples fire on highly disparate tokens and contexts, with no evident shared semantic, syntactic, or surface-form property beyond a likely diffuse/noisy activation pattern.
+########################################################################
+
+========================================================================
+### outbias feature 2934 ###
+firing rate: 31969/1000367 (3.196%)
+activation: min 1.00 | median 2.54 | p90 5.35 | max 10.54
+  histogram (nonzero activations):
+       1.00 | ######################################## 12314
+       1.96 | ################## 5835
+       2.91 | ################ 4963
+       3.86 | ############ 3987
+       4.82 | ######## 2654
+       5.77 | #### 1354
+       6.72 | # 600
+       7.68 |  210
+       8.63 |  44
+       9.58 |  8
+  promotes:  [')', '?),', '?)', '!!!)', ' ?)', ' ...)', '!!)', '!)', '),', '...),']
+  suppresses: ['.*")]', ' дописавши', 'rungsseite', '())))', 'Hentet', ' "))', ')))),', '<eos>', 'PerformLayout', 'ScopeManager']
+  top activating examples:
+    [  10.5] ...… trust me (82 yard TD run). Perkins has incredible talent and theIt...  <<' run'>>
+    [  10.3] ..., McCain campaign dirty tricks (racist robocalls), Republican efforts to keep American citizens from...  <<'alls'>>
+    [  10.2] ... known from Arago (in Tautavel) in France, Mauer in Germany and...  <<'vel'>>
+    [  10.1] ... Earth who saw that [The Games Reveal Trailer]? Probably not, that's not...  <<' Trailer'>>
+    [   9.9] ... Ring, and Steve (Sakura-Tribe Elder). Card draw in Consecrated Sphinx...  <<' Elder'>>
+    [   9.8] ... Bundesligaspielen für Frankfurt (zwei Tore, 22 Vorlagen) als...  <<' Tore'>>
+    [   9.7] ... (in a long-vacant commercial building at 1026 E....  <<' building'>>
+    [   9.6] ..., complete with screenshots (9to5Mac interviewed the pair last night with additional details...  <<'Mac'>>
+    [   9.6] ...ouse the virtues of Polish purity (xenophobia burns hot in the country, the most...  <<'ophobia'>>
+    [   9.5] ...2-3. Other than serving (CSU had 11 serving errors and New...  <<'CSU'>>
+    [   9.5] ... the ISM, comparing subsonic (Mach number below one), transonic (Mach number...  <<' number'>>
+    [   9.4] ... team of four Pokémon (human co-op or CPU controlled) survive the onslaught,...  <<'op'>>
+    [   9.4] ... Chron.com, and Patch (business columnist). Prior to that, she was a...  <<' columnist'>>
+    [   9.4] ... wooden beam of the shrine (palosa wood or acacia modesta) back to the...  <<' wood'>>
+    [   9.4] ... been for the original Beetle (especially challenging, given the Beetle's curves and the...  <<','>>
+    [   9.3] ... iOS or via the web (like Astrid, there's also a Chrome browser extension...  <<','>>
+    [   9.2] ... be based in Europe (working from home, when not on the road), where there...  <<','>>
+    [   9.2] ... teams, players, team personnel (including owners) and opponents' home cities) and...  <<' owners'>>
+    [   9.2] ... time because of random mutations (nothing is perfect including copying DNA). It is these rare...  <<' perfect'>>
+    [   9.2] ... (the ratio of momentum to viscous forces, which determines when a flow becomes turbulent)...  <<','>>
+
+### outbias feature 2934  (31969 activations) ===
+  bin 0 act[  4.4- 10.5] n=6394   modal 0.06  distinct 2682 e.g. [' run', 'alls', 'vel', ' Trailer', ' Elder', ' Tore']
+  bin 1 act[  3.1-  4.4] n=6394   modal 0.04  distinct 2216 e.g. ['And', '5', 'Hg', ' word', 'and', ' at']
+  bin 2 act[  2.0-  3.1] n=6394   modal 0.03  distinct 2443 e.g. [' standing', ' of', ' and', 'hnia', ' bit', '.,']
+  bin 3 act[  1.4-  2.0] n=6394   modal 0.03  distinct 2616 e.g. [' Clinton', ' and', ' the', 'Reuters', ':', '–']
+  bin 4 act[  1.0-  1.4] n=6393   modal 0.03  distinct 2745 e.g. [' to', ' my', ' her', ' (', ' construction', ' amid']
+
+########################################################################
+### JUDGE  full #13294  (anon F2817):  "Diffuse unrelated token activations"
+  peak    : breadth 5 coherence 1 abstract 1
+  typical : breadth 5 coherence 1 abstract 1
+  -> Both peak and typical examples fire on highly varied, unrelated words and token types, with no evident shared semantic, syntactic, or surface property in the shown evidence.
+########################################################################
+
+========================================================================
+### full feature 13294 ###
+firing rate: 266927/1000367 (26.683%)
+activation: min 1.02 | median 2.09 | p90 3.96 | max 11.11
+  histogram (nonzero activations):
+       1.02 | ######################################## 127395
+       2.03 | ######################## 77274
+       3.04 | ########### 37646
+       4.05 | #### 15907
+       5.06 | # 5789
+       6.06 |  2050
+       7.07 |  632
+       8.08 |  185
+       9.09 |  36
+      10.10 |  13
+  promotes:  ['AddTagHelper', 'WebVitals', 'ftagPool', 'BufferException', 'ListItemIcon', 'TagMode', 'InstanceState', ' DBNull', ' nahilalakip', 'TargetException']
+  suppresses: ['PreferredItem', 'IsPostBack', ' linkovi', 'AutoresizingMask', 'DockStyle', ' geographic', "('../../", 'intios', '"]];', 'urlpatterns']
+  top activating examples:
+    [  11.1] ... is only decent and his shooting ability is nil. Knight also used to have an extremely...  <<' nil'>>
+    [  11.1] ... was named to the Tournament All-Star Team. In 2015,...  <<' Team'>>
+    [  11.0] ... at Kentucky. He threw five career touchdown passes (and five interceptions).
+
+"We...  <<' passes'>>
+    [  10.9] ... with the USWNT, scoring three goals. In the 2015...  <<' goals'>>
+    [  10.6] ... on Cryptocurrencies from both business and technical perspectives at Schulich School of Business, and...  <<' perspectives'>>
+    [  10.4] ...cies You, said: ' Phenylethylamine is secreted when you see someone across the...  <<'thylamine'>>
+    [  10.4] ... writer charged that Einstein had cribbed the theory from the writings of a thirteenth-century...  <<' theory'>>
+    [  10.3] ... 11 international appearances, scoring three goals.
+
+„I still have a lot...  <<' goals'>>
+    [  10.3] ... in life depends more on luck than on effort. Individuals who grow up during recessions...  <<' effort'>>
+    [  10.2] ...972 and won the NFL MVP award in 1969.)
+
+...  <<' award'>>
+    [  10.2] ... body, which are potent cancer-causing chemicals. Research has linked nitrites to higher...  <<' chemicals'>>
+    [  10.2] ... to cheating, and also issued a qualified apology to Walsh after repeated prompting.
+
+‘...  <<' apology'>>
+    [  10.1] ... Immortality awaits the man who can overthrow Einstein. The popular uproar over the theory surprised...  <<' Einstein'>>
+    [  10.0] ... 3 astronauts, and 1 Fields Medalist.[6]
+
+History [ edit...  <<' Medal'>>
+    [   9.9] ... was named to the NHL All-Rookie Team last season after a successful 15...  <<' Team'>>
+    [   9.9] ... managed to hit 1089 points while Fritz Chess score comes out to be...  <<' points'>>
+    [   9.9] ... threw five career touchdown passes (and five interceptions).
+
+"We did the Wildcat...  <<' interceptions'>>
+    [   9.8] ...2006 she wrote about her experience on the BBC News website.
+
+Image...  <<' experience'>>
+    [   9.8] ... of the soulful ballad (more on that later) this song has a gentle lilting...  <<' later'>>
+    [   9.8] ... he let loose with a few expletives.
+
+McKinley was much more composed...  <<'tives'>>
+
+### full feature 13294  (266927 activations) ===
+  bin 0 act[  3.2- 11.1] n=53386  modal 0.04  distinct 9708 e.g. [' nil', ' Team', ' passes', ' goals', ' perspectives', 'thylamine']
+  bin 1 act[  2.4-  3.2] n=53386  modal 0.04  distinct 9235 e.g. [' approval', ']', ' the', ' McKinley', ' governor', ' opposed']
+  bin 2 act[  1.8-  2.4] n=53386  modal 0.04  distinct 8884 e.g. [' Somebody', 't', ' my', ' in', '6', ' congratulated']
+  bin 3 act[  1.4-  1.8] n=53386  modal 0.04  distinct 8562 e.g. [' gratis', ' was', ' that', ' Overall', ' first', ' revealed']
+  bin 4 act[  1.0-  1.4] n=53383  modal 0.05  distinct 8407 e.g. [' out', ' consumers', ' upheld', ' police', ' that', ' such']

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LLM-judge rubric for feature abstractness</title>
+<style>
+  @page { size: letter; margin: 0.85in 0.9in; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+    font-size: 10.5pt; line-height: 1.5; color: #1a1a1a;
+    max-width: 720px; margin: 0 auto;
+  }
+  h1 { font-size: 19pt; margin: 0 0 2pt; letter-spacing: -0.01em; }
+  h2 { font-size: 13pt; margin: 20pt 0 6pt; padding-bottom: 3pt;
+       border-bottom: 1px solid #ddd; }
+  h3 { font-size: 11pt; margin: 14pt 0 4pt; color: #b02a37; letter-spacing: 0.02em; }
+  p { margin: 6pt 0; }
+  ul { margin: 6pt 0; padding-left: 18pt; }
+  li { margin: 3pt 0; }
+  code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt;
+         background: #f3f3f3; padding: 0.5pt 3pt; border-radius: 3px; }
+  hr { border: none; border-top: 1px solid #e2e2e2; margin: 16pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt; }
+  td { border: 1px solid #e0e0e0; padding: 4pt 8pt; vertical-align: top; font-size: 10pt; }
+  td.lvl { width: 34px; text-align: center; font-weight: 700; background: #f7f7f7;
+           color: #b02a37; }
+  .sub { color: #555; }
+  .lead { font-size: 10.5pt; }
+  .callout { background: #faf7f0; border-left: 3px solid #d9b34a; padding: 6pt 10pt;
+             margin: 8pt 0; border-radius: 0 4px 4px 0; }
+  h3, table, .callout { break-inside: avoid; }
+</style>
+</head>
+<body>
+
+<h1>LLM-judge rubric for feature abstractness</h1>
+
+<p class="lead"><strong>Purpose.</strong> The triviality metrics (modal-word&nbsp;%, distinct-word count) only measure <em>lexical</em> diversity — they can't tell a noise feature that fires on many varied words apart from a genuine <em>abstract</em> feature like "negation." This LLM judge measures <strong>abstractness/complexity</strong> directly, so we can compare the abstractness <em>distribution</em> across the three SAEs (full / hybrid / outbias).</p>
+
+<p><strong>How it's run.</strong></p>
+<ul>
+  <li>The judge is an LLM (currently <code>gpt-5.6-terra</code>, via the Batch API) rating one feature at a time.</li>
+  <li>It is <strong>blind to which SAE a feature came from</strong> — so the rubric cannot bias the full-vs-hybrid-vs-outbias comparison.</li>
+  <li>For each feature it sees two blocks of examples: <strong>PEAK</strong> (strongest activations) and <strong>TYPICAL</strong> (a uniform random sample of firings), and rates them independently. Each example shows the activating token wrapped in <code>《》</code> with a few tokens of context.</li>
+  <li>Output per block: three integer axes (below) + a short <code>label</code> and <code>rationale</code>.</li>
+</ul>
+
+<hr>
+
+<h2>How to read the examples</h2>
+<ul>
+  <li><strong>Judge from the <code>《》</code> token itself</strong> — ask "what property of <em>this</em> token makes the feature fire?" The surrounding words are only context. Rate what the highlighted tokens share, not what the paragraphs happen to be about.</li>
+  <li><strong>Subwords.</strong> The <code>《》</code> token is often just a <em>piece</em> of a word (the tokenizer splits words, e.g. <code>Cr|umble</code>, <code>Vie|ja</code>). Read the whole word and the small construction it completes, not the bare fragment — the shared property may live there (e.g. <code>umble / Dip / Soup / Cr</code> all being "the final piece of a dish name in a recipe title" → coherent). But do <strong>not</strong> infer a property the token or its word doesn't itself carry.</li>
+</ul>
+
+<h2>Rate COHERENCE first — it gates abstractness</h2>
+
+<h3>COHERENCE (1–5)</h3>
+<p class="sub">Do the <code>《》</code> tokens in this block share one consistent property (a meaning, a role, or a surface form) that explains the firing?</p>
+<table>
+  <tr><td class="lvl">1</td><td>none: highlighted tokens look unrelated; no property explains them (noise)</td></tr>
+  <tr><td class="lvl">2</td><td>weak: a minority share a property; most do not</td></tr>
+  <tr><td class="lvl">3</td><td>mixed: a clear property holds for most, with several outliers</td></tr>
+  <tr><td class="lvl">4</td><td>strong: nearly all firings share one clear property</td></tr>
+  <tr><td class="lvl">5</td><td>exact: every firing has the same clear property, no exceptions</td></tr>
+</table>
+
+<h3>ABSTRACTNESS (0–5)</h3>
+<p class="sub">Given a coherent property, how abstract is it? Rate the property named for coherence.</p>
+<table>
+  <tr><td class="lvl">0</td><td>No real pattern. Use whenever coherence ≤ 2 — don't invent a concept out of noise</td></tr>
+  <tr><td class="lvl">1</td><td>The exact same word or spelling every time — fires on one specific token or letter-pattern, regardless of meaning (e.g. always <code>the</code>; or always words ending in <code>-ing</code>)</td></tr>
+  <tr><td class="lvl">2</td><td>One word or its close variants — a single word across its senses, or a few synonyms for one thing (e.g. big / large / huge)</td></tr>
+  <tr><td class="lvl">3</td><td>One topic — many different words, but all from the same subject area (e.g. healthcare, elections, basketball)</td></tr>
+  <tr><td class="lvl">4</td><td>A role or relationship, not a topic — many unrelated words linked by what they <em>do</em> in the sentence, not what they're <em>about</em> (e.g. negation words, comparisons, or "an organization being founded," which shows up in sports, business, and charities alike)</td></tr>
+  <tr><td class="lvl">5</td><td>An abstract idea no word list could capture — spans many topics and roles at once (e.g. uncertainty, formality, politeness)</td></tr>
+</table>
+<div class="callout"><strong>3-vs-4 test.</strong> Look at what the passages are <em>about</em>. If firings stay locked to one subject (sports words never appear outside sports) → <strong>3</strong>. If the same relation/action/role recurs across many <em>different</em> subjects → <strong>4</strong>. A noun you could name a subject ("about sports/law") is a topic (3); a verb-y action or relation that happens in any subject ("something is being founded / negated / compared") is a frame (4).</div>
+
+<h3>BREADTH (1–5)</h3>
+<p class="sub">How many distinct tokens / words / contexts does the feature respond to?</p>
+<table>
+  <tr><td class="lvl">1</td><td>one surface form only (a single token or word)</td></tr>
+  <tr><td class="lvl">2</td><td>a few surface variants of one word</td></tr>
+  <tr><td class="lvl">3</td><td>a handful of related words</td></tr>
+  <tr><td class="lvl">4</td><td>many words within one area</td></tr>
+  <tr><td class="lvl">5</td><td>many varied words across many contexts</td></tr>
+</table>
+
+<h3>Then give</h3>
+<ul>
+  <li><strong><code>label</code></strong> — 2–6 words naming what the feature detects (write "incoherent" if coherence ≤ 2).</li>
+  <li><strong><code>rationale</code></strong> — one sentence naming the concrete shared property of the <code>《》</code> tokens (or stating there is none), citing the actual property, not a vibe.</li>
+</ul>
+
+<hr>
+
+<h2>Lineage (Scaling Monosemanticity)</h2>
+<p>This reuses the paper's automated-interpretability recipe — an LLM judge on a small anchored scale, grounded in the activating token, with a "no interpretation here" floor (<code>0</code>), validated against human labels — but points it at <strong>abstractness</strong> rather than the paper's <strong>specificity</strong>. The abstractness ladder and the coherence-gates-abstractness structure are specific to this project (they're the axis word-counting can't reach).</p>
+
+<h2>Validation status</h2>
+<p>Validated against hand labels on a seeded, SAE-balanced sample of features (blind, same rubric). Agreement was strong on coherence, breadth, and the "no-pattern" gate; the weakest axis was abstractness, traced to two causes: (a) the judge under-crediting features that are semantically coherent but lexically varied, and (b) subword tokenization. The <strong>subword rule above</strong> was added to address these. A fresh-sample re-validation (a held-out seed, so the fix isn't measured on the features it was tuned on) is the next step before scaling to the full feature set.</p>
+
+</body>
+</html>

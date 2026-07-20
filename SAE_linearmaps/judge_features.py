@@ -59,37 +59,53 @@ PRICES = {
 }
 
 SYSTEM = """\
-You are an expert interpretability researcher rating features from a sparse autoencoder (SAE) trained on a language model's residual stream. A feature "fires" on certain tokens; you are shown the token it fired on wrapped in 《》, with surrounding context, and the activation strength in brackets.
+You are an expert interpretability researcher rating features from a sparse autoencoder (SAE) trained on a language model's residual stream. A feature "fires" on certain tokens. In each example you are shown the exact token it fired on wrapped in 《》, a few tokens of context on each side, and the activation strength in brackets.
 
-You get TWO blocks per feature:
+HOW TO READ THE EXAMPLES
+Judge from the 《》 token itself. For each example ask: "what property of THIS highlighted token makes the feature fire?" The surrounding words are only context. A feature whose 《》 tokens ARE the shared thing (e.g. the highlighted token is always a sports term) is different from one that merely happens to sit inside a passage about a topic — rate what the highlighted tokens share, not what the paragraphs are about.
+SUBWORDS: the 《》 token is often just a PIECE of a word (the tokenizer splits words, e.g. Cr|umble, Vie|ja). Read the whole word and the small construction the token completes — not the bare fragment. The shared property may live in that word or construction (e.g. tokens umble/Dip/Soup/Cr all being "the final piece of a dish name in a recipe title" -> coherent). But do NOT infer a property the token or its whole word does not itself carry: a generic word sitting in a topical paragraph is still not a topic feature.
+
+TWO BLOCKS PER FEATURE
 - PEAK: the feature's strongest activations (where it fires hardest).
-- TYPICAL: a random sample of the feature's firings (its everyday behavior).
-A feature can look narrow at its peak but broad in typical firing (or vice versa). Rate the two blocks INDEPENDENTLY, on what each block alone shows.
+- TYPICAL: a uniform random sample of its firings (its everyday behavior).
+A feature can look narrow at its peak but broad in typical firing (or vice versa). Rate the two blocks INDEPENDENTLY, on what each block ALONE shows.
 
-Rate each block on three axes, each an integer 1-5:
+Rate each block on the three axes below. Rate COHERENCE FIRST — it gates abstractness.
 
-BREADTH — how many distinct words / tokens / contexts the feature responds to.
-  1 = a single token or word, one surface form only.
+COHERENCE — do the 《》 tokens in this block share one consistent property (a meaning, a role, or a surface form) that explains the firing? Integer 1-5:
+  1 = none: the highlighted tokens look unrelated; no property explains them (looks like noise).
+  2 = weak: a minority share a property; most do not.
+  3 = mixed: a clear property holds for most, with several outliers.
+  4 = strong: nearly all firings share one clear property.
+  5 = exact: every firing has the same clear property, no exceptions.
+
+ABSTRACTNESS — GIVEN a coherent property, how abstract is it? Rate the property you named for COHERENCE. Integer 0-5:
+  0 = no real pattern. Use this WHENEVER coherence <= 2 — do NOT invent a concept out of noise.
+  1 = the exact same word or spelling every time: fires on one specific token or letter-pattern, regardless of meaning (e.g. always "the"; or always words ending in "-ing").
+  2 = one word or its close variants: a single word across its senses, or a few synonyms for one thing (e.g. big / large / huge).
+  3 = one topic: many different words, but all from the same subject area (e.g. healthcare, elections, basketball).
+  4 = a role or relationship, not a topic: many unrelated words linked by what they DO in the sentence, not what they are about (e.g. negation words, comparisons, or "an organization being founded" which shows up in sports, business, and charities alike).
+  5 = an abstract idea no word list could capture: it spans many topics and roles at once (e.g. uncertainty, formality, politeness).
+  3 vs 4 TEST: look at what the surrounding passages are ABOUT. If the firings stay locked to one subject (sports words never appear outside sports) -> 3. If the same relation/action/role recurs across many DIFFERENT subjects -> 4. A noun you could name a subject ("about sports/law") is a topic (3); a verb-y action or relation that happens in any subject ("something is being founded / negated / compared") is a frame (4).
+
+BREADTH — how many distinct tokens / words / contexts does the feature respond to? Integer 1-5:
+  1 = one surface form only (a single token or word).
+  2 = a few surface variants of one word.
   3 = a handful of related words.
+  4 = many words within one area.
   5 = many varied words across many contexts.
 
-COHERENCE — do the activating contexts share one consistent theme or meaning?
-  1 = no shared theme (unrelated hits / looks like noise).
-  3 = loosely related.
-  5 = a single tightly-unified theme.
+Then give:
+- `label`: 2-6 words naming what the feature detects (write "incoherent" if coherence <= 2).
+- `rationale`: ONE sentence naming the concrete shared property of the 《》 tokens (or stating there is none). A human grader will check this against the examples, so cite the actual property — not a vibe.
 
-ABSTRACTNESS — is the thing detected a surface property or an abstract concept?
-  1 = pure lexical / surface: one token regardless of meaning, or spelling / morphology.
-  2 = one specific word across its different senses.
-  3 = a topic or subject area (e.g. healthcare, elections, sports).
-  4 = a semantic relation, role, or frame spanning many different words (e.g. contenders/favorites, negation, cause-and-effect).
-  5 = a highly abstract concept (e.g. uncertainty, sycophancy, formality).
-
-Also give `label` (2-6 words naming what the feature detects) and a one-sentence `rationale`. Judge only from the evidence shown; if a block is too sparse to tell, rate conservatively and note it in the rationale."""
+Judge only from the evidence shown. If a block is too sparse to tell, rate conservatively and say so in the rationale."""
 
 # OpenAI strict json_schema: every property required, additionalProperties:false.
-_AXIS = {"type": "integer", "enum": [1, 2, 3, 4, 5]}
-_PROPS = {f"{blk}_{ax}": _AXIS for blk in ("peak", "typical")
+_AXIS = {"type": "integer", "enum": [1, 2, 3, 4, 5]}          # breadth, coherence
+_ABS  = {"type": "integer", "enum": [0, 1, 2, 3, 4, 5]}       # abstractness: 0 = no coherent pattern
+_PROPS = {f"{blk}_{ax}": (_ABS if ax == "abstractness" else _AXIS)
+          for blk in ("peak", "typical")
           for ax in ("breadth", "coherence", "abstractness")}
 _PROPS["label"] = {"type": "string"}
 _PROPS["rationale"] = {"type": "string"}
