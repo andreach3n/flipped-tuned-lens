@@ -43,7 +43,7 @@
   <li>The judge is an LLM (currently <code>gpt-5.6-terra</code>, via the Batch API) rating one feature at a time.</li>
   <li>It is <strong>blind to which SAE a feature came from</strong> — so the rubric cannot bias the full-vs-hybrid-vs-outbias comparison.</li>
   <li>For each feature it sees two blocks of examples: <strong>PEAK</strong> (strongest activations) and <strong>TYPICAL</strong> (a uniform random sample of firings), and rates them independently. Each example shows the activating token wrapped in <code>《》</code> with a few tokens of context.</li>
-  <li>Output per block: three integer axes (below) + a short <code>label</code> and <code>rationale</code>.</li>
+  <li>Output per block: two LLM-rated axes (coherence, abstractness) + a short <code>label</code> and <code>rationale</code>. <strong>Breadth</strong> is <em>not</em> LLM-rated — it's measured in Python (see below).</li>
 </ul>
 
 <hr>
@@ -78,15 +78,8 @@
 </table>
 <div class="callout"><strong>3-vs-4 test.</strong> Look at what the passages are <em>about</em>. If firings stay locked to one subject (sports words never appear outside sports) → <strong>3</strong>. If the same relation/action/role recurs across many <em>different</em> subjects → <strong>4</strong>. A noun you could name a subject ("about sports/law") is a topic (3); a verb-y action or relation that happens in any subject ("something is being founded / negated / compared") is a frame (4).</div>
 
-<h3>BREADTH (1–5)</h3>
-<p class="sub">How many distinct tokens / words / contexts does the feature respond to?</p>
-<table>
-  <tr><td class="lvl">1</td><td>one surface form only (a single token or word)</td></tr>
-  <tr><td class="lvl">2</td><td>a few surface variants of one word</td></tr>
-  <tr><td class="lvl">3</td><td>a handful of related words</td></tr>
-  <tr><td class="lvl">4</td><td>many words within one area</td></tr>
-  <tr><td class="lvl">5</td><td>many varied words across many contexts</td></tr>
-</table>
+<h3>Breadth — measured in Python, not by the LLM</h3>
+<p class="sub">Breadth (how many distinct words a feature fires on) is the <strong>effective-#words</strong> metric — <code>exp(entropy)</code> of the feature's word distribution — computed over <em>all</em> firings in <code>eval_trivial.py</code>, not rated by the LLM. A deterministic count over the full data is exact and cheaper than having the model eyeball it from a handful of examples, so the LLM is reserved for the two axes that genuinely need judgment (coherence + abstractness).</p>
 
 <h3>Then give</h3>
 <ul>

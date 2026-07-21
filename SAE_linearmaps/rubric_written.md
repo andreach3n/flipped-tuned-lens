@@ -6,7 +6,7 @@
 - The judge is an LLM (currently `gpt-5.6-terra`, via the Batch API) rating one feature at a time.
 - It is **blind to which SAE a feature came from** — so the rubric cannot bias the full-vs-hybrid-vs-outbias comparison.
 - For each feature it sees two blocks of examples: **PEAK** (strongest activations) and **TYPICAL** (a uniform random sample of firings), and rates them independently. Each example shows the activating token wrapped in `《》` with a few tokens of context.
-- Output per block: three integer axes (below) + a short `label` and `rationale`.
+- Output per block: two LLM-rated axes (coherence, abstractness) + a short `label` and `rationale`. **Breadth** is *not* LLM-rated — it's measured in Python (see below).
 
 ---
 
@@ -41,16 +41,8 @@ Given a coherent property, how abstract is it? Rate the property named for coher
 
 **3-vs-4 test.** Look at what the passages are *about*. If firings stay locked to one subject (sports words never appear outside sports) → **3**. If the same relation/action/role recurs across many *different* subjects → **4**. A noun you could name a subject ("about sports/law") is a topic (3); a verb-y action or relation that happens in any subject ("something is being founded / negated / compared") is a frame (4).
 
-### BREADTH (1–5)
-How many distinct tokens / words / contexts does the feature respond to?
-
-| | |
-|---|---|
-| **1** | one surface form only (a single token or word) |
-| **2** | a few surface variants of one word |
-| **3** | a handful of related words |
-| **4** | many words within one area |
-| **5** | many varied words across many contexts |
+### Breadth — measured in Python, not by the LLM
+Breadth (how many distinct words a feature fires on) is the **effective-#words** metric — `exp(entropy)` of the feature's word distribution — computed over *all* firings in `eval_trivial.py`, not rated by the LLM. A deterministic count over the full data is exact and cheaper than having the model eyeball it from a handful of examples, so the LLM is reserved for the two axes that genuinely need judgment (coherence + abstractness).
 
 ### Then give
 - **`label`** — 2–6 words naming what the feature detects (write "incoherent" if coherence ≤ 2).

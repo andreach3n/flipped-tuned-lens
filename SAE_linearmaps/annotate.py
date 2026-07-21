@@ -30,7 +30,8 @@ VAL_PER_SAE = int(os.environ.get("VAL_PER_SAE", 7))
 VAL_SEED = int(os.environ.get("VAL_SEED", 1))
 EX_SHOW = int(os.environ.get("EX_SHOW", 10))
 
-AXES = ["breadth", "coherence", "abstractness"]
+# breadth is measured in Python (eff_words), not the LLM — so it is not labeled/validated here
+AXES = ["coherence", "abstractness"]
 BLOCKS = ["peak", "typical"]
 
 
@@ -90,13 +91,6 @@ RUBRIC = """\
      3-vs-4 TEST: look at what the passages are ABOUT. Locked to one subject (sports words never appear
        outside sports) -> 3. Same relation/action/role recurring across many DIFFERENT subjects -> 4.
        A noun you could name a subject -> topic (3); a verb-y action/relation in any subject -> frame (4).
-
-  BREADTH (1-5) — how many distinct tokens / words / contexts does it respond to?
-     1 one surface form only (a single token or word)
-     2 a few surface variants of one word
-     3 a handful of related words
-     4 many words within one area
-     5 many varied words across many contexts
 
   (type 'r' at any prompt to reprint this rubric · 'skip' to stop and save)"""
 
@@ -212,7 +206,7 @@ def agree():
 def diff():
     """Show the features where you and the judge disagreed MOST on one axis/block,
     with the judge's label + rationale, so we can see if it's a rubric gap or noise.
-      python3 annotate.py diff [peak|typical] [abstractness|coherence|breadth]
+      python3 annotate.py diff [peak|typical] [abstractness|coherence]
     (defaults: peak abstractness — the axis that matters most)."""
     H = json.load(open(HUMAN))
     J = json.load(open(JUDGE))

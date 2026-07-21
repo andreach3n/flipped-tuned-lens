@@ -1,7 +1,7 @@
 """LLM abstractness judge for the feature-complexity experiment (steps 3-4) — OpenAI.
 
 Reads judge_blind.json (blinded, frequency-matched features), asks an OpenAI model
-to rate each feature on three axes — breadth / coherence / abstractness — for BOTH
+to rate each feature on two axes — coherence / abstractness — for BOTH
 its peak and typical activation blocks, and writes judge_ratings.json keyed by the
 anonymous feature id. The model never sees which SAE a feature came from; join back
 to full/hybrid/outbias afterwards via judge_key.json.
@@ -70,7 +70,7 @@ TWO BLOCKS PER FEATURE
 - TYPICAL: a uniform random sample of its firings (its everyday behavior).
 A feature can look narrow at its peak but broad in typical firing (or vice versa). Rate the two blocks INDEPENDENTLY, on what each block ALONE shows.
 
-Rate each block on the three axes below. Rate COHERENCE FIRST — it gates abstractness.
+Rate each block on the two axes below. Rate COHERENCE FIRST — it gates abstractness. (Breadth — how many distinct words a feature fires on — is measured separately in Python, so you do NOT rate it here.)
 
 COHERENCE — do the 《》 tokens in this block share one consistent property (a meaning, a role, or a surface form) that explains the firing? Integer 1-5:
   1 = none: the highlighted tokens look unrelated; no property explains them (looks like noise).
@@ -88,13 +88,6 @@ ABSTRACTNESS — GIVEN a coherent property, how abstract is it? Rate the propert
   5 = an abstract idea no word list could capture: it spans many topics and roles at once (e.g. uncertainty, formality, politeness).
   3 vs 4 TEST: look at what the surrounding passages are ABOUT. If the firings stay locked to one subject (sports words never appear outside sports) -> 3. If the same relation/action/role recurs across many DIFFERENT subjects -> 4. A noun you could name a subject ("about sports/law") is a topic (3); a verb-y action or relation that happens in any subject ("something is being founded / negated / compared") is a frame (4).
 
-BREADTH — how many distinct tokens / words / contexts does the feature respond to? Integer 1-5:
-  1 = one surface form only (a single token or word).
-  2 = a few surface variants of one word.
-  3 = a handful of related words.
-  4 = many words within one area.
-  5 = many varied words across many contexts.
-
 Then give:
 - `label`: 2-6 words naming what the feature detects (write "incoherent" if coherence <= 2).
 - `rationale`: ONE sentence naming the concrete shared property of the 《》 tokens (or stating there is none). A human grader will check this against the examples, so cite the actual property — not a vibe.
@@ -102,11 +95,11 @@ Then give:
 Judge only from the evidence shown. If a block is too sparse to tell, rate conservatively and say so in the rationale."""
 
 # OpenAI strict json_schema: every property required, additionalProperties:false.
-_AXIS = {"type": "integer", "enum": [1, 2, 3, 4, 5]}          # breadth, coherence
+_AXIS = {"type": "integer", "enum": [1, 2, 3, 4, 5]}          # coherence
 _ABS  = {"type": "integer", "enum": [0, 1, 2, 3, 4, 5]}       # abstractness: 0 = no coherent pattern
 _PROPS = {f"{blk}_{ax}": (_ABS if ax == "abstractness" else _AXIS)
           for blk in ("peak", "typical")
-          for ax in ("breadth", "coherence", "abstractness")}
+          for ax in ("coherence", "abstractness")}
 _PROPS["label"] = {"type": "string"}
 _PROPS["rationale"] = {"type": "string"}
 SCHEMA = {"type": "object", "properties": _PROPS,
@@ -268,8 +261,8 @@ def pilot():
         v = json.loads(r.choices[0].message.content)
         k = key[f["id"]]
         print(f"\n{f['id']}  [{k['sae']} #{k['feat']}  {k['freq_bin']}]  \"{v['label']}\"")
-        print(f"  peak    : breadth {v['peak_breadth']}  coherence {v['peak_coherence']}  abstract {v['peak_abstractness']}")
-        print(f"  typical : breadth {v['typical_breadth']}  coherence {v['typical_coherence']}  abstract {v['typical_abstractness']}")
+        print(f"  peak    : coherence {v['peak_coherence']}  abstract {v['peak_abstractness']}")
+        print(f"  typical : coherence {v['typical_coherence']}  abstract {v['typical_abstractness']}")
         print(f"  → {v['rationale']}")
 
 
