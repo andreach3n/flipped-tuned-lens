@@ -1,4 +1,4 @@
-"""Reconstruction-vs-sparsity curve: FVU on h (y) vs measured L0 (x), full vs hybrid.
+"""Reconstruction-vs-sparsity curve: FVU on h (y) vs measured L0 (x), full vs hybrid vs outbias.
 Reads sweep_results.pt (from eval_sweep.py). CPU / seconds.
 
 The horizontal gap between the curves at a fixed FVU = hybrid's win in "extra active-feature
@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 CACHE_DIR = "/workspace/sae_cache_layer13"
 results = t.load(f"{CACHE_DIR}/sweep_results.pt")
 
-STYLE = {"full": ("#4553c9", "o"), "hybrid": ("#2c885f", "*")}
+STYLE = {"full": ("#4553c9", "o"), "hybrid": ("#2c885f", "*"), "outbias": ("#c0392b", "s")}
 
 fig, ax = plt.subplots(figsize=(7.5, 5.5))
 for mode, (color, marker) in STYLE.items():
@@ -30,8 +30,8 @@ for mode, (color, marker) in STYLE.items():
 ax.set_xscale("log"); ax.set_yscale("log")
 ax.set_xlabel("Sparsity  (L0 = active features per token)")
 ax.set_ylabel("FVU on h  (normalized reconstruction error)")
-ax.set_title("Reconstruction vs sparsity — full vs hybrid\n"
-             "(hybrid's L0 excludes the dense linear map)", fontsize=12)
+ax.set_title("Reconstruction vs sparsity — full vs hybrid vs outbias\n"
+             "(hybrid/outbias L0 excludes the dense linear map)", fontsize=12)
 ax.legend()
 ax.annotate("better", xy=(0.08, 0.08), xycoords="axes fraction", color="#888", fontsize=11)
 ax.annotate("", xy=(0.03, 0.03), xytext=(0.13, 0.13), xycoords="axes fraction",

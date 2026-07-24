@@ -1,0 +1,8 @@
+# Install these AFTER a RunPod PyTorch base image (which already ships torch + CUDA).
+# NOTE: `pip install sae_lens` may bump torch. If it does, verify GPU still works:
+#     python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+# Once a run works end-to-end, freeze exact versions:  pip freeze > requirements.lock.txt
+sae_lens
+transformer_lens
+datasets
+huggingface_hub

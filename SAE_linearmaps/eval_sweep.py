@@ -1,7 +1,7 @@
 """Reconstruction-vs-sparsity sweep: for each (mode, k) SAE, measure FVU-on-h and the achieved L0.
 
 Assumes the fleet was trained with train_sae_res.py at each k, producing k-tagged files:
-  sae_full_k{K}_final.pt / sae_hybrid_k{K}_final.pt  (+ P_hybrid_k{K}.pt for hybrid)
+  sae_{full,hybrid,outbias}_k{K}_final.pt  (+ P_hybrid_k{K}.pt / P_outbias_k{K}.pt for those modes)
 Missing files are skipped, so you can run it before the whole fleet is done.
 
 Output: sweep_results.pt = list of {mode, k, L0, FVU}. Plot with plot_sweep.py.
@@ -18,7 +18,7 @@ D_IN      = 2304
 device    = t.device("cuda" if t.cuda.is_available() else "cpu")
 
 K_LIST = [16, 32, 64, 128, 256]
-MODES  = ["full", "hybrid"]
+MODES  = ["full", "hybrid", "outbias"]
 
 def stream():
     """Yield (h, tok) batches over the first N_TOKENS activations."""
@@ -55,15 +55,17 @@ for mode in MODES:
             print(f"  skip {mode} k={k}: {os.path.basename(sae_path)} missing")
             continue
         sae, scale = load_sae(sae_path)
-        P_hyb = t.load(f"{CACHE_DIR}/P_hybrid_k{k}.pt", map_location=device) if mode == "hybrid" else None
+        # hybrid & outbias both add the map back at the output; hybrid ALSO subtracts it from the encoder input.
+        P_map = (t.load(f"{CACHE_DIR}/P_hybrid_k{k}.pt",  map_location=device) if mode == "hybrid"  else
+                 t.load(f"{CACHE_DIR}/P_outbias_k{k}.pt", map_location=device) if mode == "outbias" else None)
 
         sse = 0.0; l0_sum = 0.0; n_tok = 0
         with t.no_grad():
             for hh, tt in stream():
-                x = (hh - P_hyb[tt]) if mode == "hybrid" else hh   # SAE input (residual for hybrid)
+                x = (hh - P_map[tt]) if mode == "hybrid" else hh   # hybrid encoder sees residual; full/outbias see full h
                 a = sae.encode(x / scale)                          # feature acts (post-TopK)
                 recon = sae.decode(a) * scale                      # SAE reconstruction, raw units
-                h_hat = (P_hyb[tt] + recon) if mode == "hybrid" else recon   # add the map back for hybrid
+                h_hat = (P_map[tt] + recon) if mode in ("hybrid", "outbias") else recon   # hybrid & outbias add the map at output
                 sse    += ((hh - h_hat) ** 2).double().sum().item()
                 l0_sum += (a > 0).float().sum().item()             # active features summed over tokens
                 n_tok  += hh.shape[0]
@@ -74,7 +76,7 @@ for mode in MODES:
         l0  = l0_sum / n_tok                                       # MEASURED avg active features (≈ k, but drifts)
         results.append({"mode": mode, "k": k, "L0": l0, "FVU": fvu})
         print(f"  {mode:6s} k={k:4d}  L0={l0:6.1f}  FVU={fvu:.4f}")
-        del sae, P_hyb
+        del sae, P_map
         t.cuda.empty_cache()
 
 t.save(results, f"{CACHE_DIR}/sweep_results.pt")

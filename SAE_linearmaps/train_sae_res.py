@@ -2,16 +2,10 @@ from sae_lens import BatchTopKTrainingSAE, BatchTopKTrainingSAEConfig
 from sae_lens.saes.sae import TrainStepInput
 import torch as t
 import torch.nn as nn
-from transformer_lens import (
-    ActivationCache,
-    FactoredMatrix,
-    HookedTransformer,
-    HookedTransformerConfig,
-)
-from transformer_lens.hook_points import HookPoint
-from datasets import load_dataset
-import glob
 import os
+
+from activations import load_model, activation_stream, take_sample   # on-the-fly gemma activations
+from hf_io import push, pull                                         # artifacts live on HF, not a volume
 
 MODEL_NAME = "google/gemma-2-2b"
 LAYER=13
@@ -19,15 +13,17 @@ D_IN=2304
 D_SAE=16384
 K    = int(os.environ.get("K", 64))        # sweep: K=32 MODE=full python train_sae_res.py
 LR=4e-4
-CACHE_DIR="/workspace/sae_cache_layer13"
 BATCH = 4096
-MODE = os.environ.get("MODE", "hybrid")    # "full" | "resid" | "hybrid"
+MODE = os.environ.get("MODE", "hybrid")    # "full" | "resid" | "hybrid" | "outbias"
 SEED = int(os.environ.get("SEED", 0))      # reproducibility across the sweep fleet
-TRAIN_TOKENS = int(os.environ.get("TRAIN_TOKENS", 20_000_000))  # cap training length (full cache ~50M; FVU converges by ~20M)
+TRAIN_TOKENS = int(os.environ.get("TRAIN_TOKENS", 20_000_000))  # cap training length (FVU converges by ~20M)
+BUFFER_TOKENS = int(os.environ.get("BUFFER_TOKENS", 1_000_000))  # rolling shuffle buffer for the activation stream
+PUSH_EVERY    = int(os.environ.get("PUSH_EVERY", 10_000))        # push the rolling checkpoint to HF every N steps
+OUT_DIR = os.environ.get("OUT_DIR", "/workspace/out")            # local scratch (ephemeral); the real home is HF
+os.makedirs(OUT_DIR, exist_ok=True)
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
-model = HookedTransformer.from_pretrained_no_processing(MODEL_NAME, dtype=t.bfloat16).to(device)
-model.eval()
+model = load_model(device)                 # kept resident: activations are generated live during training
 
 cfg = BatchTopKTrainingSAEConfig(
     d_in=D_IN, d_sae=D_SAE, k=K,
@@ -39,53 +35,43 @@ t.manual_seed(SEED)                        # deterministic SAE init (reproducibl
 sae = BatchTopKTrainingSAE(cfg).to(device)
 
 linear_map = nn.Linear(2304, 2304).to(device)
-linear_map.load_state_dict(t.load("/workspace/linear_map_layer_13.pt", weights_only=False))
+map_path = pull("linear_map_layer_13.pt")      # pulled from HF (run fit_map.py once to create it)
+linear_map.load_state_dict(t.load(map_path, weights_only=False))
 linear_map.eval()
 
 with t.no_grad():
     embed_table = model.embed(t.arange(model.cfg.d_vocab, device=device))  # (V, 2304): the input to the linear map
     P = linear_map(embed_table.float())                                    # (V, 2304): frozen greedy prediction table
-    if not os.path.exists(f"{CACHE_DIR}/P.pt"):   # don't clobber an existing P.pt (deterministic anyway)
-        t.save(P, f"{CACHE_DIR}/P.pt")
+    t.save(P, f"{OUT_DIR}/P.pt")
 
 # hybrid needs the embedding table kept around to recompute P[token] WITH gradient each step
 embed_W = embed_table.detach() if MODE in ("hybrid", "outbias") else None
 del embed_table
 
-del model                # free ~5 GB — not needed after P is built
+# model is NOT deleted anymore -- activation_stream keeps using it to generate activations on the fly
 t.cuda.empty_cache()
 
-SANITY_N = 100_000   # subsample for the check/scale — a full 1M-token chunk on GPU OOMs
-chunk_h   = t.cat(t.load(f"{CACHE_DIR}/layer_13_chunk_1.pt"), dim=0)[:SANITY_N].float().to(device)
-chunk_tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0)[:SANITY_N].to(device)
+SANITY_N = 100_000   # subsample for the check/scale
+_H, _T    = take_sample(model, device, n_tokens=SANITY_N, seed=SEED)   # generated live, not from a cache file
+chunk_h   = _H.float().to(device)
+chunk_tok = _T.to(device)
 r = chunk_h - P[chunk_tok]
 explained = 1 - (r**2).mean() / chunk_h.var()
-print(explained.item())   # want ≈ 0.66
+print(f"linear-map explained variance on sample: {explained.item():.4f}")   # want ≈ 0.66
 
-# from chunk_1 (already loaded above as chunk_h / chunk_tok):
 sample = (chunk_h - P[chunk_tok]) if MODE in ("resid", "hybrid") else chunk_h
 scale  = sample.norm(dim=-1).mean() / (D_IN ** 0.5)   # a single scalar
-del chunk_h, chunk_tok, r, sample    # free the ~9 GB sanity-check tensors before training
+del chunk_h, chunk_tok, r, sample, _H, _T
+if MODE != "resid":
+    del P            # only resid indexes P[tok] in the loop; free ~2.4 GB for the others (model is resident now)
 t.cuda.empty_cache()
 
-# yield raw (activation, token) pairs; the residual / normalization is built per-step in the loop,
-# because in hybrid mode P[token] is recomputed each step through the TRAINABLE linear map.
+# activations are generated on the fly by activation_stream (gemma over openwebtext), which keeps a
+# shuffled rolling buffer -- no /workspace cache, no network volume. The residual / normalization is
+# still built per-step in the loop, because in hybrid mode P[token] goes through the TRAINABLE map.
 def iter_batches():
-    layer_files = sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt"))
-    for ci, lf in enumerate(layer_files):
-        tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
-        h = t.cat(t.load(lf), dim=0)
-        tok = t.cat(t.load(tf), dim=0)
-
-        g = t.Generator().manual_seed(SEED * 1000 + ci)   # deterministic data order, per chunk
-        shuffled_idx = t.randperm(h.shape[0], generator=g)
-        h = h[shuffled_idx]
-        tok = tok[shuffled_idx]
-
-        for start in range(0, h.shape[0], BATCH):
-            h_batch = h[start: start+BATCH].float().to(device)
-            tok_batch = tok[start: start+BATCH].to(device)
-            yield h_batch, tok_batch
+    return activation_stream(model, device, batch=BATCH,
+                             buffer_tokens=BUFFER_TOKENS, seed=SEED, max_tokens=TRAIN_TOKENS)
 
 # hybrid jointly trains the linear map (warm-started from the fitted map) alongside the SAE
 params = list(sae.parameters()) + (list(linear_map.parameters()) if MODE in ("hybrid", "outbias") else [])
@@ -146,7 +132,7 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
             msg += f" | FVU_h {fvu_h.item():.3f}"
         print(msg)
 
-    # rolling resume checkpoint (overwrites the same file each time)
+    # rolling resume checkpoint (overwrites the same file each time; local, plus HF for crash-safety)
     if step % 2000 == 0:
         ckpt = {
             "sae": sae.state_dict(),
@@ -159,7 +145,10 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
         }
         if MODE in ("hybrid", "outbias"):
             ckpt["linear_map"] = linear_map.state_dict()   # JOINTLY-TRAINED map; differs from the frozen P.pt
-        t.save(ckpt, f"{CACHE_DIR}/sae_{MODE}_k{K}_latest.pt")
+        latest_path = f"{OUT_DIR}/sae_{MODE}_k{K}_latest.pt"
+        t.save(ckpt, latest_path)
+        if step > 0 and step % PUSH_EVERY == 0:
+            push(latest_path)   # bare pod has no persistent disk -- park a resume point on HF
 
     seen_tokens += h_batch.shape[0]
     if seen_tokens >= TRAIN_TOKENS:        # stop once the token budget is hit
@@ -177,8 +166,16 @@ if MODE in ("hybrid", "outbias"):
     final_ckpt["linear_map"] = linear_map.state_dict()     # needed at eval to rebuild the trained P[token]
 
 # save the JOINTLY-TRAINED prediction table so eval can add/subtract it (hybrid & outbias)
+p_path = None
 if MODE in ("hybrid", "outbias"):
     with t.no_grad():
-        t.save(linear_map(embed_W.float()), f"{CACHE_DIR}/P_{MODE}_k{K}.pt")
-t.save(final_ckpt, f"{CACHE_DIR}/sae_{MODE}_k{K}_final.pt")
-print(f"saved final SAE -> {CACHE_DIR}/sae_{MODE}_k{K}_final.pt")
+        p_path = f"{OUT_DIR}/P_{MODE}_k{K}.pt"
+        t.save(linear_map(embed_W.float()), p_path)
+final_path = f"{OUT_DIR}/sae_{MODE}_k{K}_final.pt"
+t.save(final_ckpt, final_path)
+
+# push results to HF so they're never trapped on a pod's ephemeral disk
+push(final_path)
+if p_path is not None:
+    push(p_path)
+print(f"saved {final_path} and pushed to HF ({os.environ.get('HF_REPO', 'andreayhchen/gemma2-2b-linearmap-saes')})")
