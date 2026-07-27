@@ -2,40 +2,46 @@ from sae_lens import BatchTopKTrainingSAE, BatchTopKTrainingSAEConfig
 from sae_lens.saes.sae import TrainStepInput
 import torch as t
 import torch.nn as nn
-from transformer_lens import (
-    ActivationCache,
-    FactoredMatrix,
-    HookedTransformer,
-    HookedTransformerConfig,
-)
-from transformer_lens.hook_points import HookPoint
-from datasets import load_dataset
-import glob
 import os
 
 from transformers import AutoTokenizer
+from activations import load_model, activation_stream   # on-the-fly gemma activations (no /workspace cache)
+from hf_io import pull, push                             # SAEs pulled from HF; stats pushed back
+
 tokenizer = AutoTokenizer.from_pretrained("google/gemma-2-2b")
 
-CACHE_DIR   = "/workspace/sae_cache_layer13"
-FULL_PATH   = f"{CACHE_DIR}/sae_full_final.pt"
-RESID_PATH  = f"{CACHE_DIR}/sae_resid_final.pt"
-HYBRID_PATH = f"{CACHE_DIR}/sae_hybrid_final.pt"
-OUTBIAS_PATH = f"{CACHE_DIR}/sae_outbias_k64_final.pt"   # ablation: encoder sees full h, map at output
-P_PATH      = f"{CACHE_DIR}/P.pt"
-P_HYBRID_PATH = f"{CACHE_DIR}/P_hybrid.pt"
-N_TOKENS = 4_000_000
+K_SAE     = int(os.environ.get("K", 64))                  # which k-tagged SAEs to evaluate
+OUT_DIR   = os.environ.get("OUT_DIR", "/workspace/out")   # local scratch for stats_*.pt + plots
+os.makedirs(OUT_DIR, exist_ok=True)
+N_TOKENS  = int(os.environ.get("EVAL_TOKENS", 4_000_000)) # tokens scanned for each feature's top-K
+EVAL_SEED = 0            # fixed -> all four SAEs are scored on the SAME activations (fair comparison)
 bs = 8192
-# EVAL_N      = 100_000     # subset of tokens for the eval (memory-bounded)
 TOPK        = 20         # top activating examples per feature
 TRIVIAL_THRESH = 0.8      # modal-token fraction above this = "trivial"
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 
-# commenting out for streaming instead
-# h = t.cat(t.load(f"{CACHE_DIR}/layer_13_chunk_1.pt"), dim=0)[:EVAL_N]   # (100k, 2304)
-# tok = t.cat(t.load(f"{CACHE_DIR}/tokens_chunk_1.pt"),   dim=0)[:EVAL_N]   # (100k,)
-P = t.load(P_PATH, map_location=device)   # (V, 2304)
-# only present once hybrid has been trained; stays None otherwise so full/resid eval still runs
-P_hybrid = t.load(P_HYBRID_PATH, map_location=device) if os.path.exists(P_HYBRID_PATH) else None
+model = load_model(device)   # needed to generate activations AND to rebuild the P tables
+
+# pull the trained SAEs from HF (k-tagged names produced by the new train_sae_res.py)
+def _try_pull(name):
+    try:    return pull(name)
+    except Exception:  return None
+FULL_PATH    = pull(f"sae_full_k{K_SAE}_final.pt")
+RESID_PATH   = pull(f"sae_resid_k{K_SAE}_final.pt")
+HYBRID_PATH  = _try_pull(f"sae_hybrid_k{K_SAE}_final.pt")
+OUTBIAS_PATH = _try_pull(f"sae_outbias_k{K_SAE}_final.pt")
+
+# embedding table (V, 2304) = the input to the linear maps. Lets us rebuild P (and P_hybrid below)
+# locally instead of downloading the 2.36 GB vocab tables -- same construction train_sae_res.py used.
+with t.no_grad():
+    embed_table = model.embed(t.arange(model.cfg.d_vocab, device=device)).float()
+
+# frozen map -> P (used only by the RESID encoder: x = h - P[token])
+linear_map = nn.Linear(2304, 2304).to(device)
+linear_map.load_state_dict(t.load(pull("linear_map_layer_13.pt"), weights_only=False))
+with t.no_grad():
+    P = linear_map(embed_table)   # (V, 2304)
+P_hybrid = None                   # rebuilt from the hybrid checkpoint's jointly-trained map (see below)
 
 # token_id -> normalized-word id map (needs P for vocab size)
 raw = tokenizer.convert_ids_to_tokens(list(range(P.shape[0])))   # one string per token id
@@ -55,16 +61,20 @@ def load_sae(path):
 sae_full,  scale_full  = load_sae(FULL_PATH)
 sae_resid, scale_resid = load_sae(RESID_PATH)
 
-# hybrid is OPTIONAL: only wire it in if both its SAE checkpoint and its trained P table exist,
-# so this whole script still runs (full + resid) before hybrid has been trained.
-HAVE_HYBRID = os.path.exists(HYBRID_PATH) and P_hybrid is not None
+# hybrid is OPTIONAL: only wire it in if its checkpoint was pulled. Rebuild its jointly-trained
+# P_hybrid from the checkpoint's OWN linear_map (saved inside the ckpt) -- avoids the 2.36 GB download.
+HAVE_HYBRID = HYBRID_PATH is not None
 if HAVE_HYBRID:
     sae_hybrid, scale_hybrid = load_sae(HYBRID_PATH)
+    _hyb_map = nn.Linear(2304, 2304).to(device)
+    _hyb_map.load_state_dict(t.load(HYBRID_PATH, weights_only=False)["linear_map"])
+    with t.no_grad():
+        P_hybrid = _hyb_map(embed_table)          # (V, 2304): the trained-map prediction table
     print("hybrid artifacts found -> including HYBRID in the eval")
 
 # outbias ablation: encoder saw the FULL h (like full mode), map added only at OUTPUT. For
 # triviality the map is irrelevant (features are detected from h), so its stream uses x = hh.
-HAVE_OUTBIAS = os.path.exists(OUTBIAS_PATH)
+HAVE_OUTBIAS = OUTBIAS_PATH is not None
 if HAVE_OUTBIAS:
     sae_outbias, scale_outbias = load_sae(OUTBIAS_PATH)
     print("outbias artifacts found -> including OUTBIAS in the eval")
@@ -100,35 +110,31 @@ def stream_topk(sae, scale, mode, n_tokens, K=TOPK, bs=bs):
     freq = t.zeros(F, dtype=t.long, device=device)
     seen = 0
     with t.no_grad():
-        for lf in sorted(glob.glob(f"{CACHE_DIR}/layer_13_chunk_*.pt")):
-            tf = lf.replace("layer_13_chunk_", "tokens_chunk_")
-            hc = t.cat(t.load(lf), dim=0); tc = t.cat(t.load(tf), dim=0)
-            for start in range(0, hc.shape[0], bs):
-                hh = hc[start:start+bs].float().to(device)
-                tt = tc[start:start+bs].to(device)
-                if   mode == "resid":  x = hh - P[tt]          # encoder sees the residual (frozen map)
-                elif mode == "hybrid": x = hh - P_hybrid[tt]   # encoder sees the residual (trained map)
-                else:                  x = hh                  # full AND outbias: encoder sees the full h
+        # activations generated ON THE FLY (gemma over openwebtext); fixed EVAL_SEED so every SAE is
+        # scored on the SAME sequence of (h, tok) -- a fair triviality comparison. Regenerates per SAE
+        # (4 passes) instead of caching, which is fine for a one-off eval.
+        for hh, tt in activation_stream(model, device, batch=bs, seed=EVAL_SEED, max_tokens=n_tokens):
+            if   mode == "resid":  x = hh - P[tt]          # encoder sees the residual (frozen map)
+            elif mode == "hybrid": x = hh - P_hybrid[tt]   # encoder sees the residual (trained map)
+            else:                  x = hh                  # full AND outbias: encoder sees the full h
 
-                a = sae.encode(x / scale)                     # (b, F)
-                fired = a > 0
-                freq += fired.sum(dim=0)
-                btok = tt.unsqueeze(1).expand(-1, F)          # (b, F): token id per position
-                # PEAK: top-K by activation value
-                peak_vals, s0 = t.cat([peak_vals, a], dim=0).topk(K, dim=0)
-                peak_toks = t.cat([peak_toks, btok], dim=0).gather(0, s0)
-                # UNIFORM reservoir: top-K by a uniform random key (each firing equally likely)
-                uk = t.rand_like(a); uk[~fired] = -1e9
-                uni_keys, s1 = t.cat([uni_keys, uk], dim=0).topk(K, dim=0)
-                uni_toks = t.cat([uni_toks, btok], dim=0).gather(0, s1)
-                # WEIGHTED reservoir: key = u^(1/a) (A-Res) -> firings sampled in proportion to activation
-                wk = (t.rand_like(a).clamp_min(1e-12).log() / a.clamp_min(1e-6)).exp()
-                wk[~fired] = -1e9
-                wt_keys, s2 = t.cat([wt_keys, wk], dim=0).topk(K, dim=0)
-                wt_toks = t.cat([wt_toks, btok], dim=0).gather(0, s2)
-                seen += hh.shape[0]
-                if seen >= n_tokens:
-                    return peak_toks, uni_toks, wt_toks, freq
+            a = sae.encode(x / scale)                     # (b, F)
+            fired = a > 0
+            freq += fired.sum(dim=0)
+            btok = tt.unsqueeze(1).expand(-1, F)          # (b, F): token id per position
+            # PEAK: top-K by activation value
+            peak_vals, s0 = t.cat([peak_vals, a], dim=0).topk(K, dim=0)
+            peak_toks = t.cat([peak_toks, btok], dim=0).gather(0, s0)
+            # UNIFORM reservoir: top-K by a uniform random key (each firing equally likely)
+            uk = t.rand_like(a); uk[~fired] = -1e9
+            uni_keys, s1 = t.cat([uni_keys, uk], dim=0).topk(K, dim=0)
+            uni_toks = t.cat([uni_toks, btok], dim=0).gather(0, s1)
+            # WEIGHTED reservoir: key = u^(1/a) (A-Res) -> firings sampled in proportion to activation
+            wk = (t.rand_like(a).clamp_min(1e-12).log() / a.clamp_min(1e-6)).exp()
+            wk[~fired] = -1e9
+            wt_keys, s2 = t.cat([wt_keys, wk], dim=0).topk(K, dim=0)
+            wt_toks = t.cat([wt_toks, btok], dim=0).gather(0, s2)
+            seen += hh.shape[0]
     return peak_toks, uni_toks, wt_toks, freq
 
 peak_full,  uni_full,  wt_full,  freq_full  = stream_topk(sae_full,  scale_full,  "full",  N_TOKENS)
@@ -252,16 +258,19 @@ if HAVE_OUTBIAS:
 # "nd" = WEIGHTED (activation-weighted) distinct-word count [the principled metric]; "nd_peak" = old peak metric
 # "eff"/"eff_peak" = effective #words = exp(entropy) on the WEIGHTED / PEAK sample [breadth metric for the LLM-judge analysis]
 t.save({"freq": freq_full.cpu(),  "nd": nd_full.cpu(),  "nd_peak": triviality(peak_full, freq_full)[1].cpu(),
-        "eff": eff_words(wt_full).cpu(),  "eff_peak": eff_words(peak_full).cpu(),  "alive": al_full.cpu()},  f"{CACHE_DIR}/stats_full.pt")
+        "eff": eff_words(wt_full).cpu(),  "eff_peak": eff_words(peak_full).cpu(),  "alive": al_full.cpu()},  f"{OUT_DIR}/stats_full.pt")
 t.save({"freq": freq_resid.cpu(), "nd": nd_resid.cpu(), "nd_peak": triviality(peak_resid, freq_resid)[1].cpu(),
-        "eff": eff_words(wt_resid).cpu(), "eff_peak": eff_words(peak_resid).cpu(), "alive": al_resid.cpu()}, f"{CACHE_DIR}/stats_resid.pt")
+        "eff": eff_words(wt_resid).cpu(), "eff_peak": eff_words(peak_resid).cpu(), "alive": al_resid.cpu()}, f"{OUT_DIR}/stats_resid.pt")
+push(f"{OUT_DIR}/stats_full.pt"); push(f"{OUT_DIR}/stats_resid.pt")
 if HAVE_HYBRID:
     t.save({"freq": freq_hyb.cpu(), "nd": nd_hyb.cpu(), "nd_peak": triviality(peak_hyb, freq_hyb)[1].cpu(),
-            "eff": eff_words(wt_hyb).cpu(), "eff_peak": eff_words(peak_hyb).cpu(), "alive": al_hyb.cpu()}, f"{CACHE_DIR}/stats_hybrid.pt")
+            "eff": eff_words(wt_hyb).cpu(), "eff_peak": eff_words(peak_hyb).cpu(), "alive": al_hyb.cpu()}, f"{OUT_DIR}/stats_hybrid.pt")
+    push(f"{OUT_DIR}/stats_hybrid.pt")
 if HAVE_OUTBIAS:
     t.save({"freq": freq_ob.cpu(), "nd": nd_ob.cpu(), "nd_peak": triviality(peak_ob, freq_ob)[1].cpu(),
-            "eff": eff_words(wt_ob).cpu(), "eff_peak": eff_words(peak_ob).cpu(), "alive": al_ob.cpu()}, f"{CACHE_DIR}/stats_outbias.pt")
-print(f"\nsaved per-feature stats to {CACHE_DIR}/stats_*.pt")
+            "eff": eff_words(wt_ob).cpu(), "eff_peak": eff_words(peak_ob).cpu(), "alive": al_ob.cpu()}, f"{OUT_DIR}/stats_outbias.pt")
+    push(f"{OUT_DIR}/stats_outbias.pt")
+print(f"\nsaved + pushed per-feature stats -> {OUT_DIR}/stats_*.pt")
 
 # --- distribution plot: is "single-word fraction" just a thresholding artifact? -------------
 # The headline metric collapses each feature's top-K to a BINARY (n_distinct == 1 -> "single word").
@@ -325,7 +334,7 @@ def plot_unique_token_dists(sample_name, series, tag):
     fig.suptitle(f"Unique-token distribution in top-{TOPK}  —  {sample_name} sample "
                  f"({labels}, matched frequency)", y=1.002, fontsize=14)
     fig.tight_layout()
-    out = f"{CACHE_DIR}/unique_tokens_{tag}.png"
+    out = f"{OUT_DIR}/unique_tokens_{tag}.png"
     fig.savefig(out, dpi=130, bbox_inches="tight"); plt.close(fig)
     print(f"saved plot -> {out}")
 
@@ -389,7 +398,7 @@ def heatmap_freq_vs_words():
 
     fig.suptitle("Feature frequency vs max-20 word count  (column-normalized: P(#words | freq))", fontsize=14)
     fig.tight_layout()
-    out = f"{CACHE_DIR}/heatmap_freq_vs_words.png"
+    out = f"{OUT_DIR}/heatmap_freq_vs_words.png"
     fig.savefig(out, dpi=130, bbox_inches="tight"); plt.close(fig)
     print(f"saved plot -> {out}")
 

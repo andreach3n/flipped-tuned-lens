@@ -15,13 +15,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-CACHE_DIR = "/workspace/sae_cache_layer13"
+CACHE_DIR = os.environ.get("STATS_DIR", ".")   # dir holding the stats_*.pt files (local by default)
 TOPK = 20
 
-# (label, color, stats file) -- hybrid is skipped automatically if eval_trivial hasn't produced it
-SERIES = [("full",   "#4553c9", "stats_full.pt"),
-          ("resid",  "#b5762e", "stats_resid.pt"),
-          ("hybrid", "#2c885f", "stats_hybrid.pt")]
+# (label, color, stats file) -- any series whose stats_*.pt is missing is skipped automatically
+SERIES = [("full",    "#4553c9", "stats_full.pt"),
+          ("resid",   "#b5762e", "stats_resid.pt"),
+          ("hybrid",  "#2c885f", "stats_hybrid.pt"),
+          ("outbias", "#a0439c", "stats_outbias.pt")]
 
 fig, ax = plt.subplots(figsize=(9, 5.5))
 ubins = np.arange(0.5, TOPK + 1.5, 1)              # integer-centered bins 1..20
