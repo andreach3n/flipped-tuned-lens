@@ -4,7 +4,9 @@
 #   bash setup.sh
 set -e
 
-pip install -q -r SAE_linearmaps/requirements.txt
+python -m pip install -q -r SAE_linearmaps/requirements.txt
+python -m pip uninstall -y torchvision torchaudio   # unused here; a torch-version mismatch makes them crash transformers
+python -m spacy download en_core_web_sm || echo "(spaCy model skipped -- only the probe's syntactic panel needs it)"
 
 # keep the gemma download on the Volume Disk so a Stop/Start doesn't re-download ~5 GB
 export HF_HOME=/workspace/.cache/huggingface

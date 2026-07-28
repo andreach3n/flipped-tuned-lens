@@ -6,3 +6,7 @@ sae_lens
 transformer_lens
 datasets
 huggingface_hub
+matplotlib
+numpy
+scikit-learn
+spacy
