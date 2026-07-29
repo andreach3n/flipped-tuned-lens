@@ -259,9 +259,10 @@ for ax, panel in zip(axes[0], panels):
     ax.set_title(panel); ax.set_xlabel("probe sparsity  ('dense' = all features)")
     ax.set_ylabel("balanced accuracy"); ax.set_xticks(x); ax.set_xticklabels(xt); ax.set_ylim(0.5, 1.0)
 axes[0][0].legend(fontsize=6.5, loc="lower left")
-fig.suptitle(f"k-sparse + dense probing (GPU)  —  Gemma-2-2b L{LAYER}, {DATASET}  ({N} tokens)")
+fig.suptitle(f"k-sparse + dense probing (GPU)  —  Gemma-2-2b L{LAYER}, {DATASET}  ({N} tokens, {SUBSAMPLE} train)")
 fig.tight_layout()
-png = f"{OUT_DIR}/probe_v2_{DATASET}.png"; jsn = f"{OUT_DIR}/probe_v2_{DATASET}.json"
+tag = f"{DATASET}_sub{SUBSAMPLE}"                     # subsample in the name -> 15k and 40k runs stay separate
+png = f"{OUT_DIR}/probe_v2_{tag}.png"; jsn = f"{OUT_DIR}/probe_v2_{tag}.json"
 fig.savefig(png, dpi=140, bbox_inches="tight")
 with open(jsn, "w") as f: json.dump(results, f, indent=2)
 try:
