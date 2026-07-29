@@ -9,9 +9,10 @@ v2 of probe_sparse.py -- kept as a SEPARATE file so it never clobbers the k-spar
 Metric matches probe_sparse.py -- one-vs-rest BALANCED accuracy averaged over classes (chance 0.5),
 so the dense bar sits on the same axis as the k=1..20 bars.
 
-    python probe_v2.py                        # MMLU, 57 subjects (default)
-    DATASET=finefineweb python probe_v2.py    # FineFineWeb, 10 web domains (paper default)
-    DENSE=0 python probe_v2.py                # skip the (slow) dense probe
+    python -u probe_v2.py                     # MMLU, 57 subjects, k-sparse + dense (default)
+    DATASET=finefineweb python -u probe_v2.py # FineFineWeb, 10 web domains (paper default)
+    DENSE=0 python -u probe_v2.py             # k-sparse only (fastest)
+    SUBSAMPLE=40000 python -u probe_v2.py     # bigger dense train set -> check the dense bars are stable
 
 GPU + deps:  python -m pip install scikit-learn scipy spacy && python -m spacy download en_core_web_sm
 """
@@ -25,6 +26,9 @@ from transformers import AutoTokenizer
 from datasets import load_dataset
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score
+from sklearn.exceptions import ConvergenceWarning
+import warnings
+warnings.filterwarnings("ignore", category=ConvergenceWarning)   # probes hit the iter cap; harmless
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -37,7 +41,9 @@ K_SAE     = int(os.environ.get("K", 64))
 DATASET   = os.environ.get("DATASET", "mmlu")             # "mmlu" | "finefineweb"
 N_SAMPLES = int(os.environ.get("N_SAMPLES", 1500))        # texts scanned (questions or passages)
 CONTEXT_N = int(os.environ.get("CONTEXT_N", 50))          # # texts used for the contextual probe
-DENSE     = os.environ.get("DENSE", "1") == "1"           # include the (slow) all-features probe
+DENSE     = os.environ.get("DENSE", "1") == "1"           # include the all-features (dense) probe
+SUBSAMPLE = int(os.environ.get("SUBSAMPLE", 15000))       # cap train tokens for the dense fit (speed)
+DENSE_ITER = int(os.environ.get("DENSE_ITER", 300))       # max_iter for the dense fit
 KS        = [1, 5, 10, 20]                                # sparse probe budgets (+ a "dense" bar)
 OUT_DIR   = os.environ.get("OUT_DIR", "/workspace/out")
 SEED      = 0
@@ -179,14 +185,24 @@ def probe_sparse_k(A, labels, classes, tr, te):
     return {str(k): (float(np.mean(v)) if v else float("nan")) for k, v in accs.items()}
 
 def probe_dense(A, labels, classes, tr, te):
-    Am = csr_matrix(A) if A.shape[1] > 3000 else A      # SAE features are sparse -> big speedup
-    tri, tei = np.flatnonzero(tr), np.flatnonzero(te)
+    # DENSE = logistic regression on ALL features (the decodability ceiling). Two speedups keep it
+    # from taking hours: (1) SAE features are ~99.6% zero -> a sparse matrix; (2) subsample the TRAIN
+    # tokens to SUBSAMPLE. Subsampling is safe here: the ~83k tokens come from only ~1.5k questions
+    # (heavily correlated -> effective n is far smaller, learning curve is flat past ~15k), and every
+    # method uses the SAME subsample (fixed seed + method-independent train indices), so the RELATIVE
+    # comparison is unbiased. Bump SUBSAMPLE to confirm the bars barely move. Test set stays full.
+    Am = csr_matrix(A) if A.shape[1] > 3000 else A
+    tri = np.flatnonzero(tr)
+    if len(tri) > SUBSAMPLE:
+        tri = np.random.default_rng(SEED).choice(tri, SUBSAMPLE, replace=False)   # same across methods
+    tei = np.flatnonzero(te)
     Atr, Ate = Am[tri], Am[tei]
+    ytr_all, yte_all = labels[tri], labels[tei]
     accs = []
     for c in classes:
-        ytr = labels[tr] == c; yte = labels[te] == c
+        ytr, yte = ytr_all == c, yte_all == c
         if ytr.sum() < 5 or yte.sum() < 2 or (~ytr).sum() < 5: continue
-        clf = LogisticRegression(max_iter=1000, class_weight="balanced", solver="liblinear")
+        clf = LogisticRegression(max_iter=DENSE_ITER, class_weight="balanced", solver="liblinear")
         clf.fit(Atr, ytr)
         accs.append(balanced_accuracy_score(yte, clf.predict(Ate)))
     return float(np.mean(accs)) if accs else float("nan")
