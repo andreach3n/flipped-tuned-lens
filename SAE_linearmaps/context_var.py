@@ -105,28 +105,43 @@ for mc in MIN_COUNTS:
 # ---- optional context: the LINEAR map's R^2 on the same stream, if this arm has one fitted ----
 # The lookup table upper-bounds it, so linear_r2 <= lookup_r2 is a built-in consistency check.
 linear_r2 = None
+VOCAB_CHUNK = int(os.environ.get("VOCAB_CHUNK", 8192))
 try:
     import torch.nn as nn
     lm = nn.Linear(D_IN, D_IN).to(device)
     lm.load_state_dict(t.load(pull("linear_map_layer_13.pt"), weights_only=False))
     lm.eval()
     with t.no_grad():
-        embed_table = model.embed(t.arange(V, device=device)).float()
-        P = lm(embed_table).double()                      # (V, D) token-static prediction
-        alive = count > 0
         # SSE = sum_i ||h_i - P[tok_i]||^2, expanded so it needs only the accumulators:
         #     = sum ||h||^2 - 2 <sum_h, P> + sum n_tok ||P||^2
-        sse = (sumsq_tok[alive].sum()
-               - 2.0 * (sum_h[alive].double() * P[alive]).sum()
-               + (count[alive] * (P[alive] ** 2).sum(-1)).sum())
+        # Done in VOCAB CHUNKS: materializing the full (V, D) float64 P alongside sum_h -- plus the
+        # same-size temporary that sum_h * P would create -- peaks near 22 GB and OOMs a 24 GB card
+        # at the very end of the run. Chunked, the largest temporary is VOCAB_CHUNK x D (~150 MB).
+        alive = count > 0
+        sse = t.zeros((), dtype=t.float64, device=device)
+        for s in range(0, V, VOCAB_CHUNK):
+            e = min(s + VOCAB_CHUNK, V)
+            m = alive[s:e]
+            if not bool(m.any()):
+                continue
+            emb = model.embed(t.arange(s, e, device=device)).float()   # same call fit_map.py uses
+            Pc  = lm(emb).double()[m]                                  # (chunk_alive, D)
+            sh  = sum_h[s:e][m].double()
+            nc  = count[s:e][m]
+            sse += (sumsq_tok[s:e][m].sum()
+                    - 2.0 * (sh * Pc).sum()
+                    + (nc * (Pc ** 2).sum(-1)).sum())
+            del emb, Pc, sh, nc
         grand = sum_h[alive].sum(0).double()
         total = sumsq_tok[alive].sum() - (grand ** 2).sum() / count[alive].sum()
         linear_r2 = (1.0 - sse / total).item()
     print(f"  linear map R^2 on the same stream: {linear_r2:.4f}  "
           f"(must be <= lookup-table R^2 above)")
-    del P, embed_table
 except Exception as e:
     print(f"  [skip] no linear map for this arm yet ({type(e).__name__}: {e})")
+
+if device.type == "cuda":
+    print(f"  peak GPU memory: {t.cuda.max_memory_allocated()/2**30:.1f} GiB")
 
 out = {"variant": VARIANT, "init_seed": INIT_SEED, "layer": LAYER, "n_tokens": seen,
        "by_min_count": results, "linear_map_r2": linear_r2}
