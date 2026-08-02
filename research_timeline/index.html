@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flipped Tuned Lens — Research Log</title>
+<style>
+  :root{
+    --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1b19; --muted:#6b6862;
+    --line:#e7e3da; --accent:#b4491f; --accent-soft:#f4e6df;
+    --chip:#efece4; --tldr-bg:#f6f1e8; --code:#f0ede6;
+    --maxw:820px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#16150f; --panel:#1f1e17; --ink:#eceae2; --muted:#a09a8c;
+      --line:#332f26; --accent:#e08a5b; --accent-soft:#2c2318;
+      --chip:#2a271e; --tldr-bg:#221f17; --code:#26241c;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#16150f; --panel:#1f1e17; --ink:#eceae2; --muted:#a09a8c;
+    --line:#332f26; --accent:#e08a5b; --accent-soft:#2c2318;
+    --chip:#2a271e; --tldr-bg:#221f17; --code:#26241c;
+  }
+  :root[data-theme="light"]{
+    --bg:#fbfaf7; --panel:#ffffff; --ink:#1c1b19; --muted:#6b6862;
+    --line:#e7e3da; --accent:#b4491f; --accent-soft:#f4e6df;
+    --chip:#efece4; --tldr-bg:#f6f1e8; --code:#f0ede6;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.62 "Charter","Iowan Old Style","Georgia",serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:var(--maxw); margin:0 auto; padding:56px 22px 96px}
+  header.top{margin-bottom:14px}
+  .kicker{
+    font:600 12.5px/1 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--accent); margin:0 0 14px;
+  }
+  h1{
+    font:700 clamp(30px,5.6vw,44px)/1.08 ui-sans-serif,system-ui,-apple-system,sans-serif;
+    letter-spacing:-.02em; margin:0 0 12px;
+  }
+  .lede{font-size:18px; color:var(--muted); margin:0 0 6px}
+  .meta{
+    font:500 13.5px/1.5 ui-sans-serif,system-ui,sans-serif; color:var(--muted);
+    margin-top:14px; padding-top:14px; border-top:1px solid var(--line);
+  }
+  .northstar{
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:20px 22px; margin:30px 0 8px;
+  }
+  .northstar h2{
+    font:600 12.5px/1 ui-sans-serif,system-ui,sans-serif; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 10px;
+  }
+  .northstar p{margin:0 0 10px}
+  .northstar p:last-child{margin-bottom:0}
+  /* week */
+  .week{border-top:1px solid var(--line); padding:38px 0 6px; scroll-margin-top:20px}
+  .wk-head{display:flex; gap:14px; align-items:baseline; flex-wrap:wrap; margin-bottom:4px}
+  .wk-num{
+    font:700 13px/1 ui-sans-serif,system-ui,sans-serif; color:var(--accent);
+    background:var(--accent-soft); border-radius:999px; padding:6px 12px; white-space:nowrap;
+  }
+  .wk-date{font:500 13.5px/1 ui-sans-serif,system-ui,sans-serif; color:var(--muted)}
+  h3.wk-title{
+    font:700 22px/1.2 ui-sans-serif,system-ui,sans-serif; letter-spacing:-.01em;
+    margin:12px 0 4px;
+  }
+  .tldr{
+    background:var(--tldr-bg); border-left:3px solid var(--accent);
+    border-radius:0 10px 10px 0; padding:13px 16px; margin:16px 0 20px;
+  }
+  .tldr b{
+    font:700 11.5px/1 ui-sans-serif,system-ui,sans-serif; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--accent); display:block; margin-bottom:6px;
+  }
+  .tldr p{margin:0; font-size:15.5px}
+  .why{margin:0 0 18px; padding:0 2px 0 16px; border-left:2px solid var(--line)}
+  .why b{
+    font:700 11.5px/1 ui-sans-serif,system-ui,sans-serif; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--muted); display:block; margin-bottom:6px;
+  }
+  .why p{margin:0; font-size:15px; color:var(--ink)}
+  a.ref{
+    font:500 13px/1 ui-sans-serif,system-ui,sans-serif; white-space:nowrap;
+    text-decoration:none; border-bottom:1px solid var(--accent-soft);
+  }
+  a.ref:hover{border-bottom-color:var(--accent)}
+  .refs{margin-top:30px}
+  .refs h3{font:700 20px/1.2 ui-sans-serif,system-ui,sans-serif; margin:0 0 14px}
+  .refs ol{margin:0; padding-left:22px}
+  .refs li{margin:0 0 10px; font:400 14px/1.5 ui-sans-serif,system-ui,sans-serif; color:var(--muted)}
+  .refs li a{font-weight:600}
+  .refs .t{color:var(--ink)}
+  h4.sub{
+    font:600 12px/1 ui-sans-serif,system-ui,sans-serif; letter-spacing:.1em;
+    text-transform:uppercase; color:var(--muted); margin:22px 0 10px;
+  }
+  ul.exp{margin:0 0 6px; padding-left:20px}
+  ul.exp li{margin:0 0 9px; font-size:15.5px}
+  code,.mono{
+    font:13px/1.5 ui-monospace,"SF Mono",Menlo,monospace;
+    background:var(--code); padding:1px 5px; border-radius:5px;
+  }
+  .tag{color:var(--muted); font-size:13.5px; font-style:italic}
+  /* figures */
+  .figs{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px; margin:18px 0 6px}
+  figure{margin:0; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden}
+  figure a{display:block; background:#fff}
+  figure img{display:block; width:100%; height:auto; max-width:100%}
+  figcaption{
+    font:400 13px/1.45 ui-sans-serif,system-ui,sans-serif; color:var(--muted);
+    padding:10px 13px; border-top:1px solid var(--line);
+  }
+  .one figure{max-width:100%}
+  /* result pill */
+  .result{
+    display:inline-block; font:600 11.5px/1 ui-sans-serif,system-ui,sans-serif;
+    letter-spacing:.04em; padding:5px 10px; border-radius:999px; margin:2px 6px 2px 0;
+  }
+  .r-null{background:var(--chip); color:var(--muted)}
+  .r-pos{background:var(--accent-soft); color:var(--accent)}
+  .aside{
+    background:var(--panel); border:1px dashed var(--line); border-radius:12px;
+    padding:16px 18px; margin:22px 0;
+  }
+  .aside h4{margin:0 0 10px; font:600 12px/1 ui-sans-serif,system-ui,sans-serif; letter-spacing:.1em; text-transform:uppercase; color:var(--accent)}
+  .aside table{width:100%; border-collapse:collapse; font:14px/1.5 ui-sans-serif,system-ui,sans-serif}
+  .aside td{padding:7px 8px; border-bottom:1px solid var(--line); vertical-align:top}
+  .aside td:first-child{white-space:nowrap; color:var(--accent); font-weight:600; width:1%}
+  .aside tr:last-child td{border-bottom:none}
+  footer{margin-top:48px; padding-top:22px; border-top:1px solid var(--line); color:var(--muted); font:400 14px/1.6 ui-sans-serif,system-ui,sans-serif}
+  a{color:var(--accent)}
+  .toggle{
+    position:fixed; top:14px; right:14px; z-index:10; cursor:pointer;
+    font:600 12px/1 ui-sans-serif,system-ui,sans-serif; color:var(--muted);
+    background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:8px 12px;
+  }
+</style>
+</head>
+<body>
+<div class="toggle" onclick="(function(){var r=document.documentElement;var d=(r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'));r.setAttribute('data-theme',d==='dark'?'light':'dark')})()">◐ theme</div>
+<div class="wrap">
+
+<header class="top">
+  <p class="kicker">Research Log · Mechanistic Interpretability</p>
+  <h1>Flipped Tuned Lens</h1>
+  <p class="lede">Training per-layer affine maps on Gemma-2-2B that decompose residual-stream activations into an <em>embedding-inherited</em> part and an <em>in-context</em> part — and asking what that decomposition buys us for probing and sparse dictionaries.</p>
+  <p class="meta">Gemma-2-2B · layer 13 · June 1 – July 29, 2026 · ~8 weeks · linear maps, PCA, probes, SAEs, LLM judges</p>
+</header>
+
+<section class="northstar">
+  <h2>The through-line</h2>
+  <p>It all starts with one object: a <b>linear map <span class="mono">P</span></b> that predicts a layer's activations straight from the token embedding — a "flipped" tuned lens (a normal tuned lens goes hidden&nbsp;→&nbsp;logits; this goes token&nbsp;→&nbsp;hidden). Everything downstream is a different question asked of <span class="mono">P</span>.</p>
+  <p>First I studied what <span class="mono">P</span> <em>fails</em> to reconstruct — the in-context residual <span class="mono">r = h − P[token]</span> — as the interesting signal (day-of-week geometry, truth directions). Then I used what <span class="mono">P</span> <em>predicts</em> to residualize sparse autoencoders and ask whether removing the token-predictable part yields <em>less trivial</em>, more abstract features. The map is the spine of the whole project.</p>
+</section>
+
+<!-- ============ WEEK 1 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 1</span><span class="wk-date">Jun 1 – 7</span></div>
+  <h3 class="wk-title">The flipped tuned lens &amp; reconstruction error</h3>
+  <div class="tldr"><b>TLDR</b><p>Built the core pipeline — cache Gemma-2-2B activations, train a linear map token&nbsp;→&nbsp;activation across layers, and dissect <em>where</em> it reconstructs badly. First look at the residual error as signal, not noise.</p></div>
+  <div class="why"><b>Why</b><p>The <b>tuned lens</b> <a class="ref" href="https://arxiv.org/abs/2303.08112">(Belrose et&nbsp;al. 2023)</a> learns an affine probe from each layer's hidden state <em>to the output distribution</em>, showing hidden states are decodable moving predictions. I flipped the direction — predict the hidden state <em>from the static token embedding</em>. If a large part of the residual stream is just a linear image of token identity, that part carries no in-context computation, and the interesting, context-dependent signal is exactly the residual the map <em>can't</em> explain. Charting error by token and by position is the first measurement of how much of layer&nbsp;13 is token-static vs. contextual.</p></div>
+  <h4 class="sub">Experiments</h4>
+  <ul class="exp">
+    <li><span class="mono">extract.py</span> + <span class="mono">train.py</span>: cache activations, train the linear map; swept learning rates, settled on lr=0.01; extended to multiple layers.</li>
+    <li><span class="mono">analyze_err.py</span>: decomposed reconstruction error <b>by token</b> and <b>by position in text</b> — the first "which tokens does the linear lens fail on?" question.</li>
+    <li><span class="mono">heatmap.py</span>: per-layer error heatmaps, normalized vs not.</li>
+  </ul>
+  <div class="figs">
+    <figure><a href="assets/w1_error_by_token.png"><img src="assets/w1_error_by_token.png" alt="error by token"></a><figcaption>Reconstruction error broken down by token.</figcaption></figure>
+    <figure><a href="assets/w1_error_by_position.png"><img src="assets/w1_error_by_position.png" alt="error by position"></a><figcaption>Error by position in the sequence.</figcaption></figure>
+    <figure><a href="assets/w1_heatmap.png"><img src="assets/w1_heatmap.png" alt="error heatmap"></a><figcaption>Per-layer error heatmap.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ WEEK 2 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 2</span><span class="wk-date">Jun 8 – 14</span></div>
+  <h3 class="wk-title">Day-of-week geometry</h3>
+  <div class="tldr"><b>TLDR</b><p>Zoomed into a concrete concept — days of the week — and asked how the model geometrically arranges them. PCA of day embeddings / activations, mean-only projections, and the first hints of a <em>circular</em> structure.</p></div>
+  <div class="why"><b>Why</b><p>LLMs hold linear representations of space and time <a class="ref" href="https://arxiv.org/abs/2310.02207">(Gurnee&nbsp;&amp;&nbsp;Tegmark 2023)</a>, and days-of-week are the canonical case where the representation is not a single line but a <em>circle</em> — later shown to be an exact ring used for modular arithmetic <a class="ref" href="https://arxiv.org/abs/2405.14860">(Engels et&nbsp;al. 2024)</a>. Days are a clean, closed, 7-element concept: an ideal probe for what the <em>in-context residual</em> geometry looks like once the token-static part is stripped. PCA on day tokens tests whether the ring lives in the raw activation or emerges only in the residual.</p></div>
+  <h4 class="sub">Experiments</h4>
+  <ul class="exp">
+    <li><span class="mono">days.py</span> / <span class="mono">days2.py</span> + <span class="mono">pca.py</span>: PCA over day-of-week tokens; "means only" plots to strip within-class noise; PC1–2 vs PC2–3 views; directional arrows.</li>
+    <li>End of week, pivoted from <em>looking</em> at the circle to <em>probing</em> for it — decomposing into <span class="mono">h</span>, <span class="mono">ĥ</span>, and residual.</li>
+  </ul>
+  <div class="figs">
+    <figure><a href="assets/w2_pca_pc12.png"><img src="assets/w2_pca_pc12.png" alt="pca days pc12"></a><figcaption>Day-of-week tokens in PC1–PC2.</figcaption></figure>
+    <figure><a href="assets/w2_pca_means.png"><img src="assets/w2_pca_means.png" alt="pca days means only"></a><figcaption>Class means only — the ring becomes visible.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ WEEK 3 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 3</span><span class="wk-date">Jun 15 – 21</span></div>
+  <h3 class="wk-title">Circular probes → Geometry of Truth</h3>
+  <div class="tldr"><b>TLDR</b><p>Two connected probing threads. First, fit an explicit <em>circular</em> probe to day representations (does the model lay days on a ring?). Then pivoted to the <b>Geometry of Truth</b> setup — training truth probes on <span class="mono">cities</span> and testing cross-dataset generalization.</p></div>
+  <div class="why"><b>Why</b><p>A PCA picture is suggestive but not a claim. A probe that explicitly fits a <em>circle</em> tests whether the ring is genuinely recoverable as a low-dimensional linear structure, following the multi-dimensional-feature framing of <a class="ref" href="https://arxiv.org/abs/2405.14860">Engels et&nbsp;al. (2024)</a>. Truth is the next, subtler contextual concept: the <b>Geometry of Truth</b> <a class="ref" href="https://arxiv.org/abs/2310.06824">(Marks&nbsp;&amp;&nbsp;Tegmark 2023)</a> shows a linear "truth" direction exists but is easily confounded, and their negation / cross-dataset transfer is the standard test of whether a probe found <em>truth</em> or a surface correlate — which sets up the confound stress-test in Week&nbsp;4.</p></div>
+  <h4 class="sub">Experiments</h4>
+  <ul class="exp">
+    <li><span class="mono">circular_probe.py</span> / <span class="mono">circular_probe2.py</span>: closed-form (lstsq) and gradient-descent fits on OpenWebText activations, with early stopping.</li>
+    <li><span class="mono">geometry_of_truth_notes.md</span>: distilled the Geometry of Truth paper (mass-mean probing, the MCI misalignment hypothesis).</li>
+    <li><span class="mono">probe_truth.py</span> / <span class="mono">probe_cross_dataset.py</span>: truth probes per layer, on mean vs last-token activations, regularized (C=0.1); <b>train on cities → test on neg_cities</b>.</li>
+  </ul>
+  <div class="figs">
+    <figure><a href="assets/w3_circular.png"><img src="assets/w3_circular.png" alt="circular probe loss"></a><figcaption>Circular-probe fit (gradient descent, OWT).</figcaption></figure>
+    <figure><a href="assets/w3_probe_subspace.png"><img src="assets/w3_probe_subspace.png" alt="probe subspace"></a><figcaption>PCA inside the probe subspace.</figcaption></figure>
+    <figure><a href="assets/w3_truth_cross.png"><img src="assets/w3_truth_cross.png" alt="truth cross dataset"></a><figcaption>Cross-dataset truth-probe accuracy (cities).</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ WEEK 4 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 4</span><span class="wk-date">Jun 22 – 28</span></div>
+  <h3 class="wk-title">Confounded truth datasets → weight-sparse hypergraphs</h3>
+  <div class="tldr"><b>TLDR</b><p>Pushed the truth work into a <b>7×7 probe grid</b> (layers × representation type: embedding / residual / full) with deliberately <em>confounded</em> datasets, to test what the probe really keys on. Then a hard pivot: "atoms of discourse" — treating weight-sparse embedding dimensions as hyperedges over tokens and clustering them.</p></div>
+  <div class="why"><b>Why</b><p>The Geometry of Truth's core lesson is <em>misalignment from correlational inconsistency</em> — a probe can score high while keying on a spurious correlate. The 7×7 grid over embedding / residual / full with deliberately <em>confounded</em> datasets is exactly the "is it reading truth or the confound?" test, and asks <em>where</em> the contextual signal lives — reconnecting to the embedding-vs-residual split. The pivot: "atoms of discourse" <a class="ref" href="https://arxiv.org/abs/1601.03764">(Arora et&nbsp;al. 2018)</a> show embeddings are sparse superpositions of a few semantic atoms, and weight-sparse transformers <a class="ref" href="https://arxiv.org/abs/2511.13653">(Gao et&nbsp;al. 2025)</a> give a model whose embedding dims are <em>already</em> sparse ≈ SAE codes — so the atoms can be read straight off the weights as a hypergraph, no SAE training needed. This nudged the project from probing toward sparse dictionaries.</p></div>
+  <h4 class="sub">Experiments</h4>
+  <ul class="exp">
+    <li><span class="mono">probe_grid.py</span>: 7×7 grid over confounded <span class="mono">cities / neg_cities</span> variants.</li>
+    <li>Cloned OpenAI's <span class="mono">circuit_sparsity</span>; built <span class="mono">weight_sparse.py</span> — a <span class="mono">{dim: tokens}</span> hypergraph → token-token graph → <b>Louvain communities</b>, with hub-filtering and byte-fragment removal.</li>
+  </ul>
+  <div class="figs">
+    <figure><a href="assets/w4_probe_grid_conf.png"><img src="assets/w4_probe_grid_conf.png" alt="confounded probe grid"></a><figcaption>Confounded probe grid (full activations).</figcaption></figure>
+    <figure><a href="assets/w4_community.png"><img src="assets/w4_community.png" alt="community graph"></a><figcaption>Louvain communities over the embedding hypergraph.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ WEEK 5 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 5</span><span class="wk-date">Jun 29 – Jul 5</span></div>
+  <h3 class="wk-title">SAE training infrastructure</h3>
+  <div class="tldr"><b>TLDR</b><p>Built out real SAE training and validated it before trusting any interpretability result — JumpReLU SAEs with L0 / sparsity-coefficient sweeps, seed-stability checks, and convergence at increasing token budgets (150M → 300M → 600M).</p></div>
+  <div class="why"><b>Why</b><p>To ask the real question — does removing the token-static part change the <em>dictionary</em> of features? — I first need SAEs I can trust. SAEs decompose activations into monosemantic features, but they're famously sensitive to training choices, so I built on the two sparsity-control lines that made them reliable: <b>JumpReLU</b> <a class="ref" href="https://arxiv.org/abs/2407.14435">(Rajamanoharan et&nbsp;al. 2024)</a> and <b>TopK</b> <a class="ref" href="https://arxiv.org/abs/2406.04093">(Gao et&nbsp;al. 2024)</a>. Seed-stability and reconstruction-sparsity sweeps come <em>before</em> any interpretability claim — you can't trust a result built on an untrusted SAE.</p></div>
+  <h4 class="sub">Experiments</h4>
+  <ul class="exp">
+    <li>JumpReLU SAEs with and without a sparsity sweep; sweep over L0 and the sparsity coefficient; seed SAEs for stability; convergence at coeff = 1.0.</li>
+    <li>Effective-rank check on GPT-2's embedding matrix.</li>
+  </ul>
+  <div class="figs one">
+    <figure><a href="assets/w5_jumprelu.png"><img src="assets/w5_jumprelu.png" alt="jumprelu sweep"></a><figcaption>JumpReLU sparsity sweep, 12 coefficients, 300M tokens.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ WEEK 6 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 6</span><span class="wk-date">Jul 6 – 12</span></div>
+  <h3 class="wk-title">Residual-SAE triviality — the main investigation</h3>
+  <div class="tldr"><b>TLDR</b><p>The central question: does an SAE trained on the residual <span class="mono">r = h − P[token]</span> learn fewer "trivial" single-token features than one trained on the full <span class="mono">h</span>? Trained matched full vs residual BatchTopK SAEs (16k feats, k=64, 50M tokens), built neuronpedia-style dashboards, and measured triviality carefully.</p></div>
+  <div class="why"><b>Why</b><p>SAE dictionaries are cluttered with "trivial" single-token detectors that arguably reflect <em>tokenization</em>, not computation. If much of layer&nbsp;13 is a linear image of the token (my map&nbsp;<span class="mono">P</span>), then training the SAE on the residual <span class="mono">r&nbsp;=&nbsp;h&nbsp;−&nbsp;P[token]</span> should spend capacity on <em>contextual</em> structure and waste fewer features on token identity. This is the project's central hypothesis — and the same motivation as <b>Tokenized SAEs</b> <a class="ref" href="https://arxiv.org/abs/2502.17332">(Dooms&nbsp;&amp;&nbsp;Wilhelm 2025)</a>, which adds per-token biases to peel token reconstruction off feature reconstruction.</p></div>
+  <p><span class="result r-null">Result: NULL on triviality</span> The durable output was the <em>methodology</em>, not the headline.</p>
+  <h4 class="sub">Findings</h4>
+  <ul class="exp">
+    <li><b>Two artifacts faked the effect:</b> (1) <em>peak-sampling bias</em> — features look single-token only at their strongest activations, inflating apparent triviality ~16×; (2) <em>firing-frequency confound</em> — rare features are intrinsically more trivial, and the residual dictionary just skews rarer. Both vanish under controls → trivial features are ~1%, not ~16%, and <b>residualization does not reduce triviality</b>.</li>
+    <li><b>Reconstruction accounting</b> (<span class="mono">eval_fvu.py</span>): the map explains 55% of Var(h); composite (map + resid SAE) ≈ full SAE on raw h (FVU 0.1445 vs 0.1426) → offloading the token-predictable part buys <em>zero</em> reconstruction at matched budget.</li>
+    <li><b>Metric lesson:</b> measure triviality <em>across the whole activation range</em> (activation-weighted), never just top-K peaks, and always <em>within firing-frequency bins</em>.</li>
+  </ul>
+  <div class="figs">
+    <figure><a href="assets/w6_heatmap_freq.png"><img src="assets/w6_heatmap_freq.png" alt="freq vs words heatmap"></a><figcaption>Frequency × unique-word-count, full / resid / difference.</figcaption></figure>
+    <figure><a href="assets/w6_unique_weighted.png"><img src="assets/w6_unique_weighted.png" alt="unique tokens weighted"></a><figcaption>Activation-weighted unique-word distribution (the principled metric).</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ WEEK 7 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 7</span><span class="wk-date">Jul 13 – 16</span></div>
+  <h3 class="wk-title">Hybrid / outbias maps + the LLM judge</h3>
+  <div class="tldr"><b>TLDR</b><p>Nathan's fix turned the null partly positive: instead of a <em>frozen</em> map, train the map <b>jointly</b> with the SAE end-to-end on <span class="mono">h</span>. This gives <em>better reconstruction at matched sparsity</em> AND a <em>less trivial dictionary</em>. Then an LLM judge tested whether "less trivial" actually means "more abstract."</p></div>
+  <div class="why"><b>Why</b><p>A frozen, pre-fit map is a blunt instrument; letting the map train <em>jointly</em> with the SAE (end-to-end on <span class="mono">h</span>) lets the two coordinate — the learned-per-token-bias move of <b>Tokenized SAEs</b> <a class="ref" href="https://arxiv.org/abs/2502.17332">(Dooms&nbsp;&amp;&nbsp;Wilhelm 2025)</a>. But word-count "triviality" only measures lexical spread — it can't separate a genuinely abstract feature (e.g. "negation") from noise that happens to fire on many words. Auto-interpretability with an LLM judge — OpenAI's neuron-explanation recipe <a class="ref" href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html">(Bills et&nbsp;al. 2023)</a> and Anthropic's <b>Scaling Monosemanticity</b> <a class="ref" href="https://transformer-circuits.pub/2024/scaling-monosemanticity/">(Templeton et&nbsp;al. 2024)</a> — is the standard way to score feature quality, so I pointed it at <em>abstractness</em>.</p></div>
+  <p><span class="result r-pos">Positive: reconstruction + de-trivialization</span><span class="result r-null">Null: abstractness</span></p>
+  <h4 class="sub">Findings</h4>
+  <ul class="exp">
+    <li><b>Hybrid (joint) training:</b> FVU on h 0.1426 → 0.1376; peak single-word triviality ~halved (15.7% → 9.2%). The <em>frozen</em> map is a wash — joint training is the active ingredient. Sweep over k=16…256: hybrid wins at <em>every</em> k (~10–15% fewer active features for equal reconstruction).</li>
+    <li><b>Map comparison:</b> the jointly-trained map is a <em>worse</em> standalone predictor (R² 0.551 → 0.496) but a "better teammate" — it under-commits (shrinks to ~85% norm, rotates ~24°) to leave the SAE an easier residual to sparse-code.</li>
+    <li><b>outbias ablation:</b> the de-trivialization comes from the reconstruction <em>target</em> (<span class="mono">h − P</span>), not the encoder <em>input</em>.</li>
+    <li><b>LLM judge (2832 features, blind):</b> breadth ↑ significant, but abstractness <em>flat</em> and coherence ↓. Level-5 abstraction is ~empty for all SAEs → L13 features top out at topic/frame, never sycophancy-like abstraction. So the map buys <b>broader lexical spread, not richer meaning.</b></li>
+  </ul>
+  <div class="figs">
+    <figure><a href="assets/w7_sweep.png"><img src="assets/w7_sweep.png" alt="recon vs sparsity"></a><figcaption>Reconstruction vs sparsity — hybrid below full at every k.</figcaption></figure>
+    <figure><a href="assets/w7_map_compare.png"><img src="assets/w7_map_compare.png" alt="map comparison"></a><figcaption>Greedy vs jointly-trained map (R², cosine, norm ratio).</figcaption></figure>
+    <figure><a href="assets/w7_judge_axes.png"><img src="assets/w7_judge_axes.png" alt="judge axes"></a><figcaption>Judge axes: breadth / coherence / abstractness by SAE.</figcaption></figure>
+    <figure><a href="assets/w7_judge_abstract.png"><img src="assets/w7_judge_abstract.png" alt="abstractness distribution"></a><figcaption>Abstractness distribution — flat across variants.</figcaption></figure>
+  </div>
+  <div class="aside">
+    <h4>The SAE zoo — one glossary for the recurring variants</h4>
+    <table>
+      <tr><td>full</td><td>Baseline: SAE trained directly on the activation <span class="mono">h</span>.</td></tr>
+      <tr><td>resid</td><td>SAE trained on the residual <span class="mono">r = h − P[token]</span>, with the map <b>frozen</b>.</td></tr>
+      <tr><td>hybrid</td><td>Encoder sees the residual; map is trained <b>jointly</b> with the SAE, reconstructing <span class="mono">h</span> end-to-end.</td></tr>
+      <tr><td>outbias</td><td>Encoder sees <b>full</b> <span class="mono">h</span>; the map is added only at the output. Isolates "input vs target" — closest to <em>Tokenized SAEs</em> (arXiv:2502.17332).</td></tr>
+    </table>
+    <p class="tag" style="margin:10px 0 0">Later reframed as the "skip-embed" family (pretrained-skip / residual-encoder / raw-encoder), vs a plain top-k SAE.</p>
+  </div>
+</section>
+
+<!-- ============ WEEK 8 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 8</span><span class="wk-date">Jul 20 – 23</span></div>
+  <h3 class="wk-title">Validating the judge — a written rubric &amp; a human study</h3>
+  <div class="tldr"><b>TLDR</b><p>A null on abstractness is only trustworthy if the judge is trustworthy. So I made the rubric explicit, hand-labeled a blinded, SAE-balanced validation set myself, and compared human vs judge axis-by-axis before re-running the full batch.</p></div>
+  <div class="why"><b>Why</b><p>An LLM judge is only evidence if it agrees with humans — <b>Scaling Monosemanticity</b> <a class="ref" href="https://transformer-circuits.pub/2024/scaling-monosemanticity/">(Templeton et&nbsp;al. 2024)</a> validates its auto-interp scores against human labels for exactly this reason. Before trusting a <em>null</em> on abstractness across three SAEs, I needed a written, reproducible rubric, a blinded human-vs-judge agreement check, and a held-out re-validation so any rubric fix isn't graded on the features it was tuned on.</p></div>
+  <h4 class="sub">Experiments</h4>
+  <ul class="exp">
+    <li><b>Written rubric</b> (<span class="mono">rubric_written.md/html/pdf</span>): a coherence gate (1–5) that <em>gates</em> an abstractness ladder (0–5: exact spelling → one word → topic → role/frame → abstract idea), grounded in the Scaling-Monosemanticity recipe but pointed at <em>abstractness</em> instead of specificity.</li>
+    <li><b>Human validation</b> (<span class="mono">annotate.py</span> → <span class="mono">human_val.json</span> vs <span class="mono">judge_val.json</span>): agreement strong on coherence, breadth, and the "no-pattern" floor; weakest on abstractness.</li>
+    <li><b>Bug found &amp; fixed:</b> the judge under-rated abstractness on <em>subword-split</em> tokens (it saw <span class="mono">Cr|umble</span> as unrelated fragments). Added a "read the whole word/construction" rule, then re-validated on a <b>held-out seed</b> so the fix isn't measured on the features it was tuned on.</li>
+    <li>Re-ran the full <b>2832-feature</b> batch judge with the revised rubric (<span class="mono">judge_ratings.json</span>).</li>
+  </ul>
+  <div class="figs one">
+    <figure><a href="assets/w8_judge_breadth.png"><img src="assets/w8_judge_breadth.png" alt="judge breadth"></a><figcaption>Breadth (effective-#words, computed in Python) across SAE variants — the one axis that moves.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ WEEK 9 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 9</span><span class="wk-date">Jul 24 – 27</span></div>
+  <h3 class="wk-title">Reproducible pipeline — HuggingFace &amp; a 200M retrain</h3>
+  <div class="tldr"><b>TLDR</b><p>Rebuilt the whole pipeline to be portable: generate activations at run-time instead of caching giant tensors, and push trained SAEs + maps to HuggingFace so any fresh GPU pod can pull them. Retrained all four variants at 200M tokens.</p></div>
+  <div class="why"><b>Why</b><p>Not a science week — a <em>prerequisite</em> one. The results so far lived on one specific cached box; scaling to more SAE variants, more tokens, and the coming probing experiments needed a portable pipeline (runtime activations, HuggingFace-hosted checkpoints, one-shot pod setup) so any GPU could reproduce and extend the work. Infra debt paid down before the next round.</p></div>
+  <h4 class="sub">Experiments</h4>
+  <ul class="exp">
+    <li><span class="mono">activations.py</span> (run-time activation generation), <span class="mono">fit_map.py</span>, <span class="mono">hf_io.py</span> (<span class="mono">pull</span>/<span class="mono">push</span> to <span class="mono">andreayc/gemma2-2b-linearmap-saes</span>), and <span class="mono">setup.sh</span> for a one-shot fresh-pod install — no more network volume required.</li>
+    <li>Retrained <b>full / resid / hybrid / outbias</b> at 200M tokens on the new pipeline; re-ran the pooled dictionary-triviality plot on the 200M SAEs.</li>
+    <li><span class="mono">r2_by_layer.png</span>: how much of the residual stream the linear map explains at each layer — the map's reach across depth.</li>
+  </ul>
+  <div class="figs">
+    <figure><a href="assets/w9_r2_by_layer.png"><img src="assets/w9_r2_by_layer.png" alt="r2 by layer"></a><figcaption>Linear-map R² by layer — embedding-inherited fraction across depth.</figcaption></figure>
+    <figure><a href="assets/w9_dict_200M.png"><img src="assets/w9_dict_200M.png" alt="dict equal weight 200M"></a><figcaption>Pooled dictionary triviality on the 200M-token SAEs.</figcaption></figure>
+  </div>
+</section>
+
+<!-- ============ WEEK 10 ============ -->
+<section class="week">
+  <div class="wk-head"><span class="wk-num">Week 10</span><span class="wk-date">Jul 27 – 29</span></div>
+  <h3 class="wk-title">A new lens: k-sparse probing (Temporal-SAE protocol)</h3>
+  <div class="tldr"><b>TLDR</b><p>Moved from "are features trivial?" to "do the features <em>encode useful concepts?</em>" — reproducing the probing protocol from the <b>Temporal-SAE paper</b> (arXiv:2511.05541, Fig 3): how well can a k-sparse probe on SAE features recover a semantic label (topic/domain) vs a syntactic one, and does skip-embed help?</p></div>
+  <div class="why"><b>Why</b><p>The judge said the map makes features <em>broader</em> but not more <em>abstract</em> — leaving open whether the decomposition makes them more <em>useful</em>. <b>Sparse probing</b> <a class="ref" href="https://arxiv.org/abs/2305.01610">(Gurnee et&nbsp;al. 2023)</a> is the standard way to measure how much task-relevant information a small set of features linearly carries, and the <b>Temporal-SAE paper</b> <a class="ref" href="https://arxiv.org/abs/2511.05541">(2025)</a> turns it into a clean semantic-vs-syntactic benchmark. Reproducing their Fig-3 protocol on my skip-embed SAEs asks the sharper question: does moving token-static structure into the map free up features that <em>better encode concepts</em> (topic / domain), not just spread over more words?</p></div>
+  <h4 class="sub">Experiments</h4>
+  <ul class="exp">
+    <li><span class="mono">probe_sparse.py</span> → <span class="mono">probe_v2.py</span> (GPU one-vs-rest logistic probes, standardized features, dense ceiling) → <span class="mono">probe_paper.py</span> (a faithful replication of the paper's <em>quiver_arrows</em> feature selection + single multiclass fit, in their metric).</li>
+    <li>Datasets: <b>MMLU</b> (57 subjects) and <b>FineFineWeb</b> (the paper's 10 web domains); tasks split into <em>semantic</em> vs <em>syntactic</em>.</li>
+    <li><b>Signal so far:</b> skip-embed encoders lift <em>semantic</em> probe accuracy; a fixed metric/scaling bug (unscaled dense probe underfit) was traced with Nathan and fixed with StandardScaler + subsampling, making dense a real ceiling again.</li>
+    <li><b>New thread opening:</b> can skip-embed SAEs distinguish a trained transformer from a randomly-initialized one?</li>
+  </ul>
+  <div class="figs">
+    <figure><a href="assets/w10_ksparse_bars.png"><img src="assets/w10_ksparse_bars.png" alt="ksparse probe bars"></a><figcaption>k-sparse probe accuracy by SAE variant.</figcaption></figure>
+    <figure><a href="assets/w10_probe_mmlu.png"><img src="assets/w10_probe_mmlu.png" alt="probe mmlu"></a><figcaption>Semantic vs syntactic probing on MMLU (57 subjects).</figcaption></figure>
+    <figure><a href="assets/w10_probe_finefineweb.png"><img src="assets/w10_probe_finefineweb.png" alt="probe finefineweb"></a><figcaption>Paper-metric replication on FineFineWeb (10 domains).</figcaption></figure>
+  </div>
+</section>
+
+<section class="week refs">
+  <h3>References</h3>
+  <ol>
+    <li><a href="https://arxiv.org/abs/2303.08112">Belrose et al. (2023)</a> — <span class="t">Eliciting Latent Predictions from Transformers with the Tuned Lens.</span> arXiv:2303.08112.</li>
+    <li><a href="https://arxiv.org/abs/2310.02207">Gurnee &amp; Tegmark (2023)</a> — <span class="t">Language Models Represent Space and Time.</span> arXiv:2310.02207.</li>
+    <li><a href="https://arxiv.org/abs/2405.14860">Engels et al. (2024)</a> — <span class="t">Not All Language Model Features Are One-Dimensionally Linear.</span> arXiv:2405.14860.</li>
+    <li><a href="https://arxiv.org/abs/2310.06824">Marks &amp; Tegmark (2023)</a> — <span class="t">The Geometry of Truth: Emergent Linear Structure in LLM Representations.</span> arXiv:2310.06824.</li>
+    <li><a href="https://arxiv.org/abs/1601.03764">Arora et al. (2018)</a> — <span class="t">Linear Algebraic Structure of Word Senses, with Applications to Polysemy ("atoms of discourse").</span> arXiv:1601.03764.</li>
+    <li><a href="https://arxiv.org/abs/2511.13653">Gao et al. (2025)</a> — <span class="t">Weight-sparse transformers (circuit&nbsp;sparsity).</span> arXiv:2511.13653.</li>
+    <li><a href="https://arxiv.org/abs/2407.14435">Rajamanoharan et al. (2024)</a> — <span class="t">Jumping Ahead: Improving Reconstruction Fidelity with JumpReLU Sparse Autoencoders.</span> arXiv:2407.14435.</li>
+    <li><a href="https://arxiv.org/abs/2406.04093">Gao et al. (2024)</a> — <span class="t">Scaling and Evaluating Sparse Autoencoders (TopK).</span> arXiv:2406.04093.</li>
+    <li><a href="https://arxiv.org/abs/2502.17332">Dooms &amp; Wilhelm (2025)</a> — <span class="t">Tokenized SAEs: Disentangling SAE Reconstructions.</span> arXiv:2502.17332.</li>
+    <li><a href="https://openaipublic.blob.core.windows.net/neuron-explainer/paper/index.html">Bills et al. (2023)</a> — <span class="t">Language Models Can Explain Neurons in Language Models.</span> OpenAI.</li>
+    <li><a href="https://transformer-circuits.pub/2024/scaling-monosemanticity/">Templeton et al. (2024)</a> — <span class="t">Scaling Monosemanticity: Extracting Interpretable Features from Claude 3 Sonnet.</span> Anthropic.</li>
+    <li><a href="https://arxiv.org/abs/2305.01610">Gurnee et al. (2023)</a> — <span class="t">Finding Neurons in a Haystack: Case Studies with Sparse Probing.</span> arXiv:2305.01610.</li>
+    <li><a href="https://arxiv.org/abs/2511.05541">Temporal Sparse Autoencoders (2025)</a> — <span class="t">Leveraging the Sequential Nature of Language for Interpretability.</span> arXiv:2511.05541.</li>
+  </ol>
+</section>
+
+<footer>
+  <p><b>Two honest arcs.</b> (1) The truth / days-geometry work (Weeks 1–4) was exploratory and mostly fed intuition; the project found its spine around Week 6. (2) Both headline SAE questions returned <em>nulls on the most interesting axis</em> (triviality, then abstractness) — so the durable deliverables are the <b>measurement methodology</b> (peak-bias &amp; frequency confounds, target-vs-input localization, blinded &amp; human-validated LLM judging) and, newly, a probing setup that asks whether the skip-embed decomposition makes features more <em>useful</em>, not just broader.</p>
+  <p class="tag">Generated from git history + research logs · Gemma-2-2B, layer 13 · last updated Jul 29, 2026.</p>
+</footer>
+
+</div>
+</body>
+</html>

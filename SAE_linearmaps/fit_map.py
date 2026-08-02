@@ -15,7 +15,7 @@ Run this ONCE; every SAE run then just pulls the result from HF.
 import os
 import torch as t
 import torch.nn as nn
-from activations import load_model, activation_stream, take_sample, D_IN
+from activations import load_model, activation_stream, take_sample, D_IN, VARIANT, INIT_SEED
 from hf_io import push
 
 MAP_TOKENS = int(os.environ.get("MAP_TOKENS", 20_000_000))   # plenty to fit a 2304x2304 map
@@ -58,13 +58,20 @@ with t.no_grad():
     linear_map.weight.copy_(W)
     linear_map.bias.copy_(b)
 
-# ---- report fit quality on a FRESH sample (want R^2 ~ 0.66, matching the old train.py) ----
+# ---- report fit quality on a FRESH sample ----
+# trained gemma: expect ~0.66 -- most of h_13 is genuinely contextual.
+# random arm: expect MUCH higher (~0.9+). A random stack barely mixes context (random attention
+# is unstructured; random MLPs are still ~per-token functions), so h_13 stays close to a
+# function of the current token. That gap IS the premise of the trained-vs-random experiment,
+# so a high R^2 here is the expected result, not a bug.
 Hs, Ts = take_sample(model, device, n_tokens=200_000, seed=123)
 Hs, Ts = Hs.float().to(device), Ts.to(device)
 with t.no_grad():
     pred = linear_map.to(device)(embed_table[Ts])
     r2 = 1 - ((Hs - pred) ** 2).mean() / Hs.var()
-print(f"linear map R^2 on held-out sample: {r2.item():.4f}   (expect ~0.66)")
+_expect = "expect ~0.66" if VARIANT == "trained" else "random arm: expect MUCH higher than 0.66"
+print(f"linear map R^2 on held-out sample: {r2.item():.4f}   ({_expect})")
+print(f"  VARIANT={VARIANT} INIT_SEED={INIT_SEED}")
 
 path = f"{OUT_DIR}/linear_map_layer_13.pt"
 t.save(linear_map.cpu().state_dict(), path)

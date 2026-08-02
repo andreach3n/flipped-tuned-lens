@@ -6,7 +6,24 @@ corpus (also from HF). Each item is a (h, tok) pair for one token position:
     h   = blocks.13.hook_resid_post   (the residual-stream activation, d=2304)
     tok = the token id at that position
 The BOS token (position 0) is dropped everywhere, matching the old extract.py.
+
+TRAINED-vs-RANDOM ARMS (the skip-embed diagnostic thread)
+--------------------------------------------------------
+Set VARIANT to swap in a randomly-initialized gemma of the SAME architecture:
+
+    VARIANT=trained        the real pretrained weights (DEFAULT -- unchanged behaviour)
+    VARIANT=rand_all       every weight re-sampled, embeddings included
+    VARIANT=rand_nonembed  every weight re-sampled EXCEPT embed/unembed -- isolates
+                           "learned computation" from "learned representation"
+
+Randomization follows Heap et al. (arXiv:2501.17727): each tensor is re-sampled from a
+Gaussian matched to THAT tensor's own trained mean and std. That is why the pretrained
+weights are still downloaded on a random arm -- we need their moments. Default init would
+change the activation scale across 13 layers and confound the whole comparison.
+
+INIT_SEED picks the random draw (report >=3 seeds; one draw is one sample).
 """
+import os
 import torch as t
 from transformer_lens import HookedTransformer
 from datasets import load_dataset
@@ -17,10 +34,69 @@ HOOK    = f"blocks.{LAYER}.hook_resid_post"
 SEQ_LEN = 512
 D_IN    = 2304
 
+VARIANT   = os.environ.get("VARIANT", "trained").strip() or "trained"   # trained | rand_all | rand_nonembed
+INIT_SEED = int(os.environ.get("INIT_SEED", 0))
+_VARIANTS = ("trained", "rand_all", "rand_nonembed")
+if VARIANT not in _VARIANTS:
+    raise ValueError(f"VARIANT={VARIANT!r} not in {_VARIANTS}")
+
+# gemma-2 ties lm_head to embed_tokens, so named_parameters() (which de-duplicates shared
+# tensors) yields the embedding exactly once -- skipping this one name covers both roles.
+_EMBED_NAMES = ("embed_tokens", "lm_head")
+
+
+@t.no_grad()
+def _randomize_(hf_model, keep_embeddings, seed):
+    """In-place moment-matched re-initialization of every parameter (see module docstring).
+
+    For each tensor: draw randn * std(w) + mean(w), using the TRAINED tensor's own moments.
+    Stats are computed in float32 -- mean/std over a bf16 tensor is badly imprecise.
+    RMSNorm gains are re-sampled too, matching the paper's "all model parameters"; moment
+    matching keeps them near their trained scale, but they are the parameter class most
+    likely to surprise us, so the norm check in the caller is worth watching.
+    """
+    g = t.Generator().manual_seed(seed)
+    kept, redrawn = [], 0
+    for name, p in hf_model.named_parameters():
+        if keep_embeddings and any(s in name for s in _EMBED_NAMES):
+            kept.append(name)
+            continue
+        w = p.detach().float()
+        mu, sd = w.mean().item(), w.std().item()
+        new = t.randn(p.shape, generator=g, dtype=t.float32) * sd + mu
+        p.copy_(new.to(p.dtype))
+        redrawn += 1
+    print(f"  re-initialized {redrawn} parameter tensors (seed={seed})"
+          + (f"; kept {kept}" if kept else "; embeddings included"))
+
 
 def load_model(device):
-    model = HookedTransformer.from_pretrained_no_processing(MODEL_NAME, dtype=t.bfloat16).to(device)
+    if VARIANT == "trained":
+        model = HookedTransformer.from_pretrained_no_processing(MODEL_NAME, dtype=t.bfloat16).to(device)
+        model.eval()
+        return model
+
+    # --- random arm: build the HF model, re-sample its weights, hand it to TransformerLens ---
+    # from_pretrained_no_processing forwards **from_pretrained_kwargs to from_pretrained,
+    # which accepts `hf_model` -- so TL imports OUR weights instead of re-downloading them.
+    from transformers import AutoModelForCausalLM
+    print(f"[activations] VARIANT={VARIANT} INIT_SEED={INIT_SEED}: randomizing gemma weights")
+    hf = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=t.bfloat16)
+    _randomize_(hf, keep_embeddings=(VARIANT == "rand_nonembed"), seed=INIT_SEED)
+    model = HookedTransformer.from_pretrained_no_processing(
+        MODEL_NAME, hf_model=hf, dtype=t.bfloat16,
+    ).to(device)
     model.eval()
+    del hf
+    t.cuda.empty_cache()
+
+    # Sanity: a random 13-layer stack can explode or collapse. Print the scale of h_13 so a
+    # pathological arm is caught BEFORE hours of SAE training, not after.
+    _h, _ = take_sample(model, device, n_tokens=20_000, seed=INIT_SEED)
+    _h = _h.float()
+    print(f"  h_{LAYER} check: |h| mean {_h.norm(dim=-1).mean():.2f} | "
+          f"var {_h.var().item():.4f} | max|dim var| {_h.var(0).max().item():.4f}")
+    del _h
     return model
 
 
