@@ -59,18 +59,21 @@ with t.no_grad():
     linear_map.bias.copy_(b)
 
 # ---- report fit quality on a FRESH sample ----
-# trained gemma: expect ~0.66 -- most of h_13 is genuinely contextual.
-# random arm: expect MUCH higher (~0.9+). A random stack barely mixes context (random attention
-# is unstructured; random MLPs are still ~per-token functions), so h_13 stays close to a
-# function of the current token. That gap IS the premise of the trained-vs-random experiment,
-# so a high R^2 here is the expected result, not a bug.
+# Expect ~0.66 on EITHER arm. It is tempting to predict a much higher R^2 for a random model -- "a
+# random stack barely mixes context, so h_13 should stay near a function of the current token" -- but
+# context_var.py measured exactly that on 2026-08-02 and it is FALSE: the token-static share of h_13 is
+# ~0.28 for trained AND random alike (lookup-table R^2 0.2743 vs 0.2877 at min_count>=30, 20M tokens).
+# Random attention is DIFFUSE, so every position becomes a broad random mixture of its context, which
+# produces just as much context-dependent variance as real computation does -- it is merely unstructured.
+# So a random-arm R^2 near the trained value is the EXPECTED result, NOT a sign randomization failed.
+# (This R^2 divides by Hs.var(), a scalar variance over the FLATTENED tensor, so it is on a different
+# scale from context_var.py's per-dimension-centred numbers -- see that script's docstring.)
 Hs, Ts = take_sample(model, device, n_tokens=200_000, seed=123)
 Hs, Ts = Hs.float().to(device), Ts.to(device)
 with t.no_grad():
     pred = linear_map.to(device)(embed_table[Ts])
     r2 = 1 - ((Hs - pred) ** 2).mean() / Hs.var()
-_expect = "expect ~0.66" if VARIANT == "trained" else "random arm: expect MUCH higher than 0.66"
-print(f"linear map R^2 on held-out sample: {r2.item():.4f}   ({_expect})")
+print(f"linear map R^2 on held-out sample: {r2.item():.4f}   (expect ~0.66 on either arm)")
 print(f"  VARIANT={VARIANT} INIT_SEED={INIT_SEED}")
 
 path = f"{OUT_DIR}/linear_map_layer_13.pt"
