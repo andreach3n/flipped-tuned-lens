@@ -32,7 +32,12 @@ except ImportError:
     pass
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-BLIND = os.path.join(BASE, "judge_blind.json")
+# BLIND_FILE / KEY_FILE / OUT_TAG let the SAME validated judge run on a different
+# experiment's blind file (e.g. the trained-vs-random autointerp set) without
+# touching the original judge_blind.json outputs. Defaults = original behaviour.
+BLIND = os.environ.get("BLIND_FILE", os.path.join(BASE, "judge_blind.json"))
+KEY_FILE = os.environ.get("KEY_FILE", os.path.join(BASE, "judge_key.json"))
+OUT_TAG = os.environ.get("OUT_TAG", "")
 MODEL = os.environ.get("OPENAI_JUDGE_MODEL", "gpt-5.6-terra")
 EX_PER_BLOCK = int(os.environ.get("EX_PER_BLOCK", 10))   # examples shown per block (blind file has 12)
 REASONING = os.environ.get("REASONING", "low")           # low|minimal|medium|high|none
@@ -43,6 +48,7 @@ MAX_OUT = int(os.environ.get("MAX_OUT", 3000))           # cap (reasoning tokens
 SUBSET_N = int(os.environ.get("SUBSET_N", 0))            # 0 = all; e.g. 300 = 100 per SAE
 SUBSET_SEED = int(os.environ.get("SUBSET_SEED", 0))
 _sfx = f"_{MODEL.replace('.', '').replace('-', '')}_{REASONING}_sub{SUBSET_N}" if SUBSET_N else ""
+_sfx = OUT_TAG + _sfx
 RATINGS = os.path.join(BASE, f"judge_ratings{_sfx}.json")
 BATCH_ID_FILE = os.path.join(BASE, f"judge_batch_id{_sfx}.txt")
 BATCH_INPUT = os.path.join(BASE, f"judge_batch_input{_sfx}.jsonl")
@@ -139,7 +145,7 @@ def load_features():
         feats = json.load(f)
     if SUBSET_N:                       # seeded, SAE-balanced subset for the robustness run
         import random
-        with open(os.path.join(BASE, "judge_key.json")) as fh:
+        with open(KEY_FILE) as fh:
             key = json.load(fh)
         by_sae = {}
         for x in feats:
@@ -252,7 +258,7 @@ def pilot():
     (via judge_key.json — for our inspection only; the model call is still blind).
     Use this to eyeball judge quality before committing to the full batch."""
     feats = load_features()
-    with open(os.path.join(BASE, "judge_key.json")) as fh:
+    with open(KEY_FILE) as fh:
         key = json.load(fh)
     client = OpenAI()
     n = int(os.environ.get("N_PILOT", 6))

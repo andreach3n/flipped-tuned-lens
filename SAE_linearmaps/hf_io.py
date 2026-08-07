@@ -54,10 +54,14 @@ def push(local_path, name=None):
 PULL_ROOT = os.environ.get("HF_PULL_DIR", "/workspace/hf_pull")
 
 
-def pull(name, local_dir=None):
-    """Download a file from the HF model repo; returns the local path."""
-    local_dir = local_dir or os.path.join(PULL_ROOT, HF_REPO.replace("/", "__"))
+def pull(name, local_dir=None, repo=None):
+    """Download a file from the HF model repo; returns the local path.
+
+    `repo` overrides HF_REPO for cross-arm reads (e.g. the sampling step needs BOTH
+    arms' freq files). Writes still always go to HF_REPO via push()."""
+    repo = repo or HF_REPO
+    local_dir = local_dir or os.path.join(PULL_ROOT, repo.replace("/", "__"))
     os.makedirs(local_dir, exist_ok=True)
-    path = hf_hub_download(repo_id=HF_REPO, filename=name, repo_type="model", local_dir=local_dir)
-    print(f"  ↓ pulled {name} <- {HF_REPO}")
+    path = hf_hub_download(repo_id=repo, filename=name, repo_type="model", local_dir=local_dir)
+    print(f"  ↓ pulled {name} <- {repo}")
     return path
