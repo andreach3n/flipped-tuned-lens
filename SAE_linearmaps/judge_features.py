@@ -52,6 +52,12 @@ _sfx = OUT_TAG + _sfx
 RATINGS = os.path.join(BASE, f"judge_ratings{_sfx}.json")
 BATCH_ID_FILE = os.path.join(BASE, f"judge_batch_id{_sfx}.txt")
 BATCH_INPUT = os.path.join(BASE, f"judge_batch_input{_sfx}.jsonl")
+# Chunked mode for orgs whose Batch QUEUE cap (enqueued tokens) is below the full submission
+# (tier-2 terra: 1.35M; a full 1.9k-feature run enqueues ~5M+). `run` = submit CHUNK requests,
+# poll, harvest, repeat — incremental saves, resumable. The original one-shot submit/collect
+# path is unchanged.
+CHUNK = int(os.environ.get("CHUNK", 150))
+RUN_STATE = os.path.join(BASE, f"judge_run_state{_sfx}.txt")
 
 # $/token (input, output); Batch API is 50% off both directions.
 PRICES = {
@@ -272,6 +278,81 @@ def pilot():
         print(f"  → {v['rationale']}")
 
 
+def _poll(client, bid):
+    while True:
+        b = client.batches.retrieve(bid)
+        if b.status in ("completed", "failed", "expired", "cancelled"):
+            return b
+        print(f"  status={b.status}  {b.request_counts}", flush=True)
+        time.sleep(30)
+
+
+def _harvest(client, b, done):
+    n_new = n_bad = 0
+    if getattr(b, "errors", None):
+        print(f"  batch-level errors: {b.errors}")
+    if b.error_file_id:
+        lines = client.files.content(b.error_file_id).text.strip().splitlines()
+        print(f"  {len(lines)} requests errored; first: {lines[0][:300]}")
+    if b.output_file_id:
+        for line in client.files.content(b.output_file_id).text.splitlines():
+            rec = json.loads(line)
+            resp = rec.get("response")
+            if resp and resp.get("status_code") == 200:
+                content = resp["body"]["choices"][0]["message"].get("content")
+                if content:
+                    done[rec["custom_id"]] = json.loads(content)
+                    n_new += 1
+                    continue
+            n_bad += 1
+    return n_new, n_bad
+
+
+def run():
+    """Chunked submit+collect under the batch-queue cap. Resumable: rerun after any crash."""
+    feats = load_features()
+    client = OpenAI()
+    done = {}
+    if os.path.exists(RATINGS):
+        with open(RATINGS) as f:
+            done = json.load(f)
+        if done:
+            print(f"resuming: {len(done)} ratings already collected")
+    if os.path.exists(RUN_STATE):
+        bid = open(RUN_STATE).read().strip()
+        if bid:
+            print(f"polling in-flight batch {bid} from a previous run")
+            n_new, n_bad = _harvest(client, _poll(client, bid), done)
+            print(f"  recovered {n_new} results ({n_bad} bad)")
+        os.remove(RUN_STATE)
+
+    todo = [f for f in feats if f["id"] not in done]
+    chunks = [todo[i:i + CHUNK] for i in range(0, len(todo), CHUNK)]
+    print(f"{len(done)} done, {len(todo)} to go in {len(chunks)} chunks of <= {CHUNK}")
+    for k, ch in enumerate(chunks):
+        with open(BATCH_INPUT, "w") as fh:
+            for f in ch:
+                fh.write(json.dumps({"custom_id": f["id"], "method": "POST",
+                                     "url": "/v1/chat/completions",
+                                     "body": req_body(f)}, ensure_ascii=False) + "\n")
+        up = client.files.create(file=open(BATCH_INPUT, "rb"), purpose="batch")
+        batch = client.batches.create(input_file_id=up.id, endpoint="/v1/chat/completions",
+                                      completion_window="24h")
+        open(RUN_STATE, "w").write(batch.id)
+        print(f"chunk {k + 1}/{len(chunks)}: {len(ch)} requests -> {batch.id}")
+        b = _poll(client, batch.id)
+        n_new, n_bad = _harvest(client, b, done)
+        with open(RATINGS, "w") as fh:
+            json.dump(done, fh, ensure_ascii=False)     # incremental save after every chunk
+        os.remove(RUN_STATE)
+        print(f"  chunk ended: {b.status}; +{n_new} ({n_bad} bad); total {len(done)}/{len(feats)}")
+        if b.status == "failed":
+            print("  chunk FAILED — if token_limit_exceeded, lower CHUNK and rerun `run`")
+            return
+    print(f"all done: {len(done)}/{len(feats)} ratings -> {RATINGS}")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "estimate"
-    {"estimate": estimate, "pilot": pilot, "submit": submit, "collect": collect}[cmd]()
+    {"estimate": estimate, "pilot": pilot, "submit": submit,
+     "collect": collect, "run": run}[cmd]()

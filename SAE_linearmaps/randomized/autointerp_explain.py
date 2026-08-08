@@ -32,8 +32,14 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 FEATURES = os.environ.get("FEATURES_FILE", os.path.join(BASE, "autointerp_features.json"))
 MODEL = os.environ.get("OPENAI_JUDGE_MODEL", "gpt-5.6-terra")
 REASONING = os.environ.get("REASONING", "low")
-MAX_OUT = int(os.environ.get("MAX_OUT", 2000))
+MAX_OUT = int(os.environ.get("MAX_OUT", 1000))     # pilot showed ~380 out/req; 1000 is ample
+# The org's Batch QUEUE cap (1.35M enqueued tokens for terra at tier 2) is smaller than this
+# stage's ~2.5M-token submission, so one big submit fails validation no matter what. `run`
+# submits CHUNK requests at a time, polls each to completion, harvests, then submits the
+# next -- incremental saves make it crash/disconnect-safe (rerun `run` to resume).
+CHUNK = int(os.environ.get("CHUNK", 300))
 EXPL_OUT = os.path.join(BASE, "autointerp_explanations.json")
+RUN_STATE = os.path.join(BASE, "autointerp_explain_run_state.txt")
 BATCH_ID_FILE = os.path.join(BASE, "autointerp_explain_batch_id.txt")
 BATCH_INPUT = os.path.join(BASE, "autointerp_explain_batch.jsonl")
 
@@ -124,6 +130,13 @@ def collect():
             break
         print(f"status={b.status}  {b.request_counts}", flush=True)
         time.sleep(30)
+    print(f"batch ended: status={b.status}  {b.request_counts}")
+    if getattr(b, "errors", None):
+        print(f"  batch-level errors: {b.errors}")
+    if b.error_file_id:
+        errtext = client.files.content(b.error_file_id).text
+        print(f"  {len(errtext.strip().splitlines())} requests in the error file; first line:")
+        print("  " + errtext.strip().splitlines()[0][:400])
     out, errs = {}, 0
     if b.output_file_id:
         for line in client.files.content(b.output_file_id).text.splitlines():
@@ -140,6 +153,82 @@ def collect():
     print(f"wrote {len(out)} explanations ({errs} unusable) -> {EXPL_OUT}")
 
 
+def _poll(client, bid):
+    while True:
+        b = client.batches.retrieve(bid)
+        if b.status in ("completed", "failed", "expired", "cancelled"):
+            return b
+        print(f"  status={b.status}  {b.request_counts}", flush=True)
+        time.sleep(30)
+
+
+def _harvest(client, b, done):
+    """Parse one finished batch into `done`; returns (n_new, n_bad)."""
+    n_new = n_bad = 0
+    if getattr(b, "errors", None):
+        print(f"  batch-level errors: {b.errors}")
+    if b.error_file_id:
+        lines = client.files.content(b.error_file_id).text.strip().splitlines()
+        print(f"  {len(lines)} requests errored; first: {lines[0][:300]}")
+    if b.output_file_id:
+        for line in client.files.content(b.output_file_id).text.splitlines():
+            rec = json.loads(line)
+            resp = rec.get("response")
+            if resp and resp.get("status_code") == 200:
+                content = resp["body"]["choices"][0]["message"].get("content")
+                if content:
+                    done[rec["custom_id"]] = json.loads(content)["explanation"]
+                    n_new += 1
+                    continue
+            n_bad += 1
+    return n_new, n_bad
+
+
+def run():
+    """Chunked submit+collect under the enqueued-token cap. Resumable: rerun after any crash."""
+    reqs = list(requests_iter(load_features()))
+    client = OpenAI()
+    done = {}
+    if os.path.exists(EXPL_OUT):
+        with open(EXPL_OUT) as f:
+            done = json.load(f)
+        if done:
+            print(f"resuming: {len(done)} explanations already collected")
+    if os.path.exists(RUN_STATE):                      # a chunk was in flight when we died
+        bid = open(RUN_STATE).read().strip()
+        if bid:
+            print(f"polling in-flight batch {bid} from a previous run")
+            n_new, n_bad = _harvest(client, _poll(client, bid), done)
+            print(f"  recovered {n_new} results ({n_bad} bad)")
+        os.remove(RUN_STATE)
+
+    todo = [(cid, text) for cid, text in reqs if cid not in done]
+    chunks = [todo[i:i + CHUNK] for i in range(0, len(todo), CHUNK)]
+    print(f"{len(done)} done, {len(todo)} to go in {len(chunks)} chunks of <= {CHUNK}")
+    for k, ch in enumerate(chunks):
+        with open(BATCH_INPUT, "w") as fh:
+            for cid, text in ch:
+                fh.write(json.dumps({"custom_id": cid, "method": "POST",
+                                     "url": "/v1/chat/completions",
+                                     "body": req_body(text)}, ensure_ascii=False) + "\n")
+        up = client.files.create(file=open(BATCH_INPUT, "rb"), purpose="batch")
+        batch = client.batches.create(input_file_id=up.id, endpoint="/v1/chat/completions",
+                                      completion_window="24h")
+        open(RUN_STATE, "w").write(batch.id)
+        print(f"chunk {k + 1}/{len(chunks)}: {len(ch)} requests -> {batch.id}")
+        b = _poll(client, batch.id)
+        n_new, n_bad = _harvest(client, b, done)
+        with open(EXPL_OUT, "w") as f:
+            json.dump(done, f, ensure_ascii=False)     # incremental save after every chunk
+        os.remove(RUN_STATE)
+        print(f"  chunk ended: {b.status}; +{n_new} ({n_bad} bad); total {len(done)}/{len(reqs)}")
+        if b.status == "failed":
+            print("  chunk FAILED — if token_limit_exceeded, lower CHUNK and rerun `run`")
+            return
+    print(f"all done: {len(done)}/{len(reqs)} explanations -> {EXPL_OUT}")
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else "estimate"
-    {"estimate": estimate, "pilot": pilot, "submit": submit, "collect": collect}[cmd]()
+    {"estimate": estimate, "pilot": pilot, "submit": submit,
+     "collect": collect, "run": run}[cmd]()
