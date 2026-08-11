@@ -24,11 +24,15 @@ import sys, torch
 ok = torch.cuda.is_available()
 print(f"torch {torch.__version__} | cuda build {torch.version.cuda} | available {ok}")
 if not ok:
-    print("\n!! torch cannot see a GPU. Nothing here will work. Diagnose:\n"
-          "   nvidia-smi                       # no output => this pod has no GPU attached\n"
-          "   If nvidia-smi is fine, pip installed a CPU wheel. Reinstall the CUDA build:\n"
-          "     pip install --force-reinstall --no-cache-dir torch \\\n"
-          "       --index-url https://download.pytorch.org/whl/cu124\n", file=sys.stderr)
+    # Seen 2026-08-11: pip pulled torch 2.13.0+cu130 onto a host with a 12.8 driver -> CUDA 13
+    # needs a newer driver than RunPod provides, so torch silently has no GPU. The wheel index
+    # must MATCH THE HOST DRIVER, which is why this is not pinned to one URL.
+    print("\n!! torch cannot see a GPU. Nothing here will work.\n"
+          "   1. `nvidia-smi` -- no output => this pod has no GPU attached; redeploy.\n"
+          "   2. Otherwise read its 'CUDA Version:' (the DRIVER's max) and install a torch\n"
+          "      built for that or LOWER -- a cu130 wheel on a 12.8 driver fails exactly here:\n"
+          "        pip install --force-reinstall --no-cache-dir torch \\\n"
+          "          --index-url https://download.pytorch.org/whl/cu128   # or cu124\n", file=sys.stderr)
     sys.exit(1)
 PY
 
