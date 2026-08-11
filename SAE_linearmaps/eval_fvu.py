@@ -22,7 +22,24 @@ TWO FVU CONVENTIONS ARE REPORTED, and the difference matters here:
               otherwise leak into the comparison.
 context_var.py reports the centred convention only; see its docstring.
 
-Env: K, N_TOKENS, BATCH, SEED, OUT_DIR (+ VARIANT / INIT_SEED / HF_REPO from the arm).
+WHICH CHECKPOINT: K + SUFFIX + CKPT only pick a FILENAME (`sae_{mode}_k{K}{SUFFIX}_{CKPT}.pt`).
+Defaults reproduce the historical 20M/16k artifacts, so old invocations are unchanged. For the
+100M / R=32 fleet, and for the milestone ladder that gives FVU-vs-training-tokens:
+
+    # trained arm, final
+    VARIANT=trained HF_REPO=<trained-repo> K=32 SUFFIX=_d73728_100M \
+      OUT_DIR=/dev/shm/out_eval python -u eval_fvu.py
+    # random arm, final
+    VARIANT=rand_all INIT_SEED=0 HF_REPO=<rand-repo> K=32 SUFFIX=_d73728_100M \
+      OUT_DIR=/dev/shm/out_eval python -u eval_fvu.py
+    # the ladder (per arm): CKPT=t20M, t40M, t60M, t80M
+    ... K=32 SUFFIX=_d73728_100M CKPT=t40M python -u eval_fvu.py
+
+Every run echoes the LOADED d_sae/k, so a filename that resolved to the wrong config is visible
+before the 2M-token pass starts. Remember raw FVU is uninterpretable across configs without a
+matched-Gaussian floor -- gauss_null.py must be re-run at whatever config you evaluate here.
+
+Env: K, SUFFIX, CKPT, N_TOKENS, BATCH, SEED, OUT_DIR (+ VARIANT / INIT_SEED / HF_REPO from the arm).
 """
 import os
 import json
@@ -35,6 +52,7 @@ from hf_io import push, pull
 
 K_SAE    = int(os.environ.get("K", 64))
 SUFFIX   = os.environ.get("SUFFIX", "")                 # tagged runs, e.g. _d73728_100M (see train_sae_res.py)
+CKPT     = os.environ.get("CKPT", "final")              # "final" | "t20M" | "t40M" | ... (milestone ladder)
 N_TOKENS = int(os.environ.get("N_TOKENS", 2_000_000))   # FVU converges fast; 2M is plenty
 BATCH    = int(os.environ.get("BATCH", 8192))
 SEED     = int(os.environ.get("SEED", 7))               # != training's 0 -> effectively held-out docs
@@ -45,7 +63,7 @@ device = t.device("cuda" if t.cuda.is_available() else "cpu")
 model  = load_model(device)
 V      = model.cfg.d_vocab
 print(f"[eval_fvu] VARIANT={VARIANT} INIT_SEED={INIT_SEED} layer={LAYER} K={K_SAE} "
-      f"N_TOKENS={N_TOKENS:,} stream_seed={SEED}")
+      f"SUFFIX={SUFFIX!r} CKPT={CKPT} N_TOKENS={N_TOKENS:,} stream_seed={SEED}")
 
 
 def load_sae(name):
@@ -54,6 +72,10 @@ def load_sae(name):
     sae = BatchTopKTrainingSAE(ckpt["cfg"])
     sae.load_state_dict(ckpt["sae"])
     sae.to(device).eval()
+    # Echo the geometry actually loaded. K/SUFFIX only pick a FILENAME -- this is the cheap check
+    # that the file holds the config you think it does (e.g. d_sae 73728, not the old 16384).
+    print(f"  {name}: d_sae={sae.cfg.d_sae} k={sae.cfg.k} step={ckpt.get('step')} "
+          f"tokens={ckpt.get('tokens', 'final')}")
     return sae, float(ckpt["scale"]), ckpt
 
 
@@ -65,8 +87,8 @@ def try_load(name):
         return None
 
 
-sae_full,  scale_full,  _ = load_sae(f"sae_full_k{K_SAE}{SUFFIX}_final.pt")
-sae_resid, scale_resid, _ = load_sae(f"sae_resid_k{K_SAE}{SUFFIX}_final.pt")
+sae_full,  scale_full,  _ = load_sae(f"sae_full_k{K_SAE}{SUFFIX}_{CKPT}.pt")
+sae_resid, scale_resid, _ = load_sae(f"sae_resid_k{K_SAE}{SUFFIX}_{CKPT}.pt")
 
 # The frozen greedy map, rebuilt into a (V, 2304) lookup exactly as train_sae_res.py does.
 # P.pt is NOT read from disk -- it is pure scratch there and gets deleted between runs.
@@ -79,8 +101,8 @@ with t.no_grad():
 
 # hybrid / outbias are optional -- included only if this arm has them (same guarded pattern as before).
 # Their P table comes from the checkpoint's JOINTLY-TRAINED map, not the frozen one above.
-_hyb = try_load(f"sae_hybrid_k{K_SAE}{SUFFIX}_final.pt")
-_out = try_load(f"sae_outbias_k{K_SAE}{SUFFIX}_final.pt")
+_hyb = try_load(f"sae_hybrid_k{K_SAE}{SUFFIX}_{CKPT}.pt")
+_out = try_load(f"sae_outbias_k{K_SAE}{SUFFIX}_{CKPT}.pt")
 
 
 def _trained_P(ckpt, emb):
@@ -189,6 +211,7 @@ print(f"identity check: {residr_flat * var_r_flat / var_h_flat:.6f} == {comp_fla
 
 results = {
     "variant": VARIANT, "init_seed": INIT_SEED, "layer": LAYER, "k": K_SAE,
+    "suffix": SUFFIX, "ckpt": CKPT, "d_sae": int(sae_full.cfg.d_sae),   # provenance: WHICH SAEs these are
     "n_tokens": n_rows, "stream_seed": SEED,
     "var_ratio_r_over_h": {"flat": var_r_flat / var_h_flat, "centred": ss_r_cent / ss_h_cent},
     "fvu_h_full":      {"flat": full_flat,  "centred": full_cent},
@@ -204,7 +227,8 @@ if HAVE_OUTBIAS:
     print(f"{'FVU on h  - outbias':32s} {of_:>9.4f} {oc_:>9.4f}")
     results["fvu_h_outbias"] = {"flat": of_, "centred": oc_}
 
-path = f"{OUT_DIR}/fvu_{VARIANT}_s{INIT_SEED}_k{K_SAE}{SUFFIX}.json"
+_tag = "" if CKPT == "final" else f"_{CKPT}"   # keep historical filenames unchanged
+path = f"{OUT_DIR}/fvu_{VARIANT}_s{INIT_SEED}_k{K_SAE}{SUFFIX}{_tag}.json"
 with open(path, "w") as f:
     json.dump(results, f, indent=2)
 print(f"\nsaved {path}")
