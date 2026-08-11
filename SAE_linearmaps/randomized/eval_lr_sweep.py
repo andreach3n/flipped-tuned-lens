@@ -28,6 +28,10 @@ import json
 import torch as t
 from sae_lens import BatchTopKTrainingSAE
 
+import sys
+# this experiment lives in SAE_linearmaps/randomized/ -- the shared modules
+# (activations, hf_io, sae_lens loaders) live one level up
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from activations import load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED
 from hf_io import push, pull
 
