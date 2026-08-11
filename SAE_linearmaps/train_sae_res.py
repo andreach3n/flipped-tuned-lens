@@ -69,7 +69,15 @@ chunk_h   = _H.float().to(device)
 chunk_tok = _T.to(device)
 r = chunk_h - P[chunk_tok]
 explained = 1 - (r**2).mean() / chunk_h.var()
-print(f"linear-map explained variance on sample: {explained.item():.4f}")   # want ≈ 0.66
+# Sanity target is ARM-SPECIFIC, because this divides by h.var() -- a FLAT variance about one
+# scalar mean. Trained gemma's massive-activation dims give its mean vector a big cross-dimension
+# spread, which inflates that denominator and is trivially predicted by the map -> ~0.56. A random
+# arm has no massive activations (per-element mean ~0), so flat == centred there and the number
+# collapses to the true token-static share, ~0.32 (context_var.py measured 0.2877 for rand_all s0).
+# Both targets are MEASURED (2026-08-10, 100k-token startup sample): trained 0.5616, rand_all s0
+# 0.3212. The trained value cross-checks against eval_fvu's flat Var(r)/Var(h)=0.4411 -> 0.5589.
+# (An older "expect ~0.66" note here was stale -- it matched no verified measurement.)
+print(f"linear-map explained variance on sample: {explained.item():.4f}")   # want ≈0.56 trained / ≈0.32 random
 
 sample = (chunk_h - P[chunk_tok]) if MODE in ("resid", "hybrid") else chunk_h
 scale  = sample.norm(dim=-1).mean() / (D_IN ** 0.5)   # a single scalar

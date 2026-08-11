@@ -59,21 +59,25 @@ with t.no_grad():
     linear_map.bias.copy_(b)
 
 # ---- report fit quality on a FRESH sample ----
-# Expect ~0.66 on EITHER arm. It is tempting to predict a much higher R^2 for a random model -- "a
-# random stack barely mixes context, so h_13 should stay near a function of the current token" -- but
-# context_var.py measured exactly that on 2026-08-02 and it is FALSE: the token-static share of h_13 is
-# ~0.28 for trained AND random alike (lookup-table R^2 0.2743 vs 0.2877 at min_count>=30, 20M tokens).
-# Random attention is DIFFUSE, so every position becomes a broad random mixture of its context, which
-# produces just as much context-dependent variance as real computation does -- it is merely unstructured.
-# So a random-arm R^2 near the trained value is the EXPECTED result, NOT a sign randomization failed.
-# (This R^2 divides by Hs.var(), a scalar variance over the FLATTENED tensor, so it is on a different
-# scale from context_var.py's per-dimension-centred numbers -- see that script's docstring.)
+# Expect ~0.56 TRAINED, ~0.32 RANDOM (measured 2026-08-10: 0.5616 / 0.3212 on the 100k-token
+# startup sample in train_sae_res.py; the trained value cross-checks against eval_fvu's flat
+# Var(r)/Var(h)=0.4411 -> 0.5589. An older "~0.66 on either arm" note here was stale on BOTH
+# counts). The arm gap is NOT a sign randomization failed or that the
+# random model is "less token-static". The token-static share itself is ~0.28 for BOTH arms
+# (context_var.py, 2026-08-02: lookup-table R^2 0.2743 trained vs 0.2877 rand_all, min_count>=30,
+# 20M tokens) -- random attention is DIFFUSE, so every position is a broad random mixture of its
+# context, producing just as much context-dependent variance as real computation, merely unstructured.
+# The arms differ HERE only because this R^2 divides by Hs.var(), a FLAT variance about one scalar
+# mean. Trained gemma's massive-activation dims give its mean VECTOR a large cross-dimension spread,
+# which inflates that denominator and which the map predicts trivially -> 0.56. A random arm has no
+# massive activations (|h| mean == sqrt(d * var), i.e. per-element mean ~0), so flat == centred and
+# the number collapses onto the true ~0.29. See context_var.py's docstring on the two conventions.
 Hs, Ts = take_sample(model, device, n_tokens=200_000, seed=123)
 Hs, Ts = Hs.float().to(device), Ts.to(device)
 with t.no_grad():
     pred = linear_map.to(device)(embed_table[Ts])
     r2 = 1 - ((Hs - pred) ** 2).mean() / Hs.var()
-print(f"linear map R^2 on held-out sample: {r2.item():.4f}   (expect ~0.66 on either arm)")
+print(f"linear map R^2 on held-out sample: {r2.item():.4f}   (expect ~0.66 trained / ~0.30 random)")
 print(f"  VARIANT={VARIANT} INIT_SEED={INIT_SEED}")
 
 path = f"{OUT_DIR}/linear_map_layer_13.pt"
