@@ -16,14 +16,35 @@ if [ -z "$HF_TOKEN" ]; then
   echo "!! HF_TOKEN is not set. Run:  export HF_TOKEN=hf_xxx   (write scope), then re-run setup.sh"
 fi
 
-python -c "import torch; print('torch', torch.__version__, '| cuda', torch.cuda.is_available())"
+# HARD GATE, not a printout. `pip install sae_lens` can bump torch to a wheel that cannot see the
+# GPU; every script then silently falls back to device="cpu" and dies much later on an obscure
+# "Attempting to deserialize object on a CUDA device" from t.load. Fail here instead.
+python - <<'PY' || exit 1
+import sys, torch
+ok = torch.cuda.is_available()
+print(f"torch {torch.__version__} | cuda build {torch.version.cuda} | available {ok}")
+if not ok:
+    print("\n!! torch cannot see a GPU. Nothing here will work. Diagnose:\n"
+          "   nvidia-smi                       # no output => this pod has no GPU attached\n"
+          "   If nvidia-smi is fine, pip installed a CPU wheel. Reinstall the CUDA build:\n"
+          "     pip install --force-reinstall --no-cache-dir torch \\\n"
+          "       --index-url https://download.pytorch.org/whl/cu124\n", file=sys.stderr)
+    sys.exit(1)
+PY
 
 cat <<'NEXT'
-setup done. From here:
-  cd SAE_linearmaps
-  python fit_map.py                       # fit + push linear_map_layer_13.pt (run ONCE)
-  MODE=full    TRAIN_TOKENS=200000000 python train_sae_res.py
-  MODE=resid   TRAIN_TOKENS=200000000 python train_sae_res.py
-  MODE=hybrid  TRAIN_TOKENS=200000000 python train_sae_res.py
-  MODE=outbias TRAIN_TOKENS=200000000 python train_sae_res.py
+setup done. Pick the workflow you are actually on:
+
+  EVAL the 100M / R=32 fleet (k=32, d_sae=73728) -- per arm:
+    cd SAE_linearmaps
+    VARIANT=trained  HF_REPO=<trained-repo> K=32 SUFFIX=_d73728_100M python -u eval_fvu.py
+    VARIANT=rand_all INIT_SEED=0 HF_REPO=<rand-repo> K=32 SUFFIX=_d73728_100M python -u eval_fvu.py
+    (add CKPT=t20M|t40M|t60M|t80M for the milestone ladder)
+    Raw FVU means nothing across configs -- re-run gauss_null.py at the SAME config.
+
+  TRAIN a new arm (only when the arm has no artifacts yet):
+    python fit_map.py            # ONCE PER ARM -- the map is model-specific.
+                                 # It OVERWRITES linear_map_layer_13.pt in $HF_REPO. Do not
+                                 # re-run it for an arm that already has one.
+    bash randomized/launch_replication.sh <run>     # see that script for the run matrix
 NEXT
