@@ -41,8 +41,8 @@ from hf_io import push, pull
 
 MODE         = os.environ.get("MODE", "resid")                        # "full" | "resid"
 K            = int(os.environ.get("K", 64))
-D_SAE        = 16384
-LR           = 4e-4
+D_SAE        = int(os.environ.get("D_SAE", 16384))                    # MATCH the real run being nulled
+LR           = float(os.environ.get("LR", 4e-4))                      # ditto
 BATCH        = 4096
 COV_TOKENS   = int(os.environ.get("COV_TOKENS", 5_000_000))           # n >> d=2304 for a stable Sigma
 TRAIN_TOKENS = int(os.environ.get("TRAIN_TOKENS", 20_000_000))        # MATCH the real runs
@@ -52,6 +52,16 @@ SEED         = int(os.environ.get("SEED", 0))
 OUT_DIR      = os.environ.get("OUT_DIR", "/workspace/out")
 assert MODE in ("full", "resid"), f"MODE={MODE!r} must be 'full' or 'resid'"
 os.makedirs(OUT_DIR, exist_ok=True)
+
+# A null is only a floor for a run with the SAME architecture and budget, so non-default settings
+# are tagged into the artifact names exactly as train_sae_res.py tags the real runs -- otherwise a
+# k=32/d73728 null would overwrite the k=64/16k null it is NOT comparable to. Historical defaults
+# reproduce the historical names.
+SUFFIX = ""
+if D_SAE != 16384:             SUFFIX += f"_d{D_SAE}"
+if LR != 4e-4:                 SUFFIX += f"_lr{LR:g}"
+if TRAIN_TOKENS != 20_000_000: SUFFIX += f"_{TRAIN_TOKENS // 1_000_000}M"
+print(f"[gauss_null] MODE={MODE} K={K} D_SAE={D_SAE} TRAIN_TOKENS={TRAIN_TOKENS:,} SUFFIX={SUFFIX!r}")
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 model  = load_model(device)
@@ -184,13 +194,13 @@ results = {"variant": VARIANT, "init_seed": INIT_SEED, "layer": LAYER, "k": K, "
            "cov_tokens": n, "train_tokens": steps * BATCH, "eval_tokens": n_rows,
            "scale": scale, "mean_per_dim_var": trace_var,
            "null_fvu": {"flat": null_flat, "centred": null_cent}}
-path = f"{OUT_DIR}/gauss_null_{VARIANT}_s{INIT_SEED}_{MODE}_k{K}.json"
+path = f"{OUT_DIR}/gauss_null_{VARIANT}_s{INIT_SEED}_{MODE}_k{K}{SUFFIX}.json"
 with open(path, "w") as f:
     json.dump(results, f, indent=2)
 print(f"saved {path}")
 push(path)
 
-ck_path = f"{OUT_DIR}/sae_gauss_{MODE}_k{K}_final.pt"
+ck_path = f"{OUT_DIR}/sae_gauss_{MODE}_k{K}{SUFFIX}_final.pt"
 t.save({"sae": sae.state_dict(), "cfg": sae.cfg, "scale": scale,
         "step": steps, "mode": f"gauss_{MODE}", "variant": VARIANT}, ck_path)
 push(ck_path)
