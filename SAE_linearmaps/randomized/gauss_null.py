@@ -200,7 +200,11 @@ with open(path, "w") as f:
 print(f"saved {path}")
 push(path)
 
-ck_path = f"{OUT_DIR}/sae_gauss_{MODE}_k{K}{SUFFIX}_final.pt"
+# The LOCAL name carries the arm, the REMOTE name does not: repos are already per-arm, but two
+# arms run concurrently from one OUT_DIR would otherwise write the same path -- and since save is
+# immediately followed by push, the loser's weights get uploaded to the winner's repo.
+ck_name = f"sae_gauss_{MODE}_k{K}{SUFFIX}_final.pt"                       # name on HF (unchanged)
+ck_path = f"{OUT_DIR}/{VARIANT}_s{INIT_SEED}_{ck_name}"                   # arm-specific local path
 t.save({"sae": sae.state_dict(), "cfg": sae.cfg, "scale": scale,
         "step": steps, "mode": f"gauss_{MODE}", "variant": VARIANT}, ck_path)
-push(ck_path)
+push(ck_path, name=ck_name)
