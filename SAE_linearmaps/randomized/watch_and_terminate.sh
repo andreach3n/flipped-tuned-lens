@@ -25,19 +25,24 @@
 set -uo pipefail    # deliberately NOT -e: one failed poll must never kill the watcher
 
 POLL=${POLL:-300}                       # seconds between checks
+# WHAT counts as "still working". Default is the training fleet; set it to whatever you actually
+# launched, e.g. WATCH_PAT=gauss_null.py for a null sweep. Getting this wrong is dangerous in one
+# direction: a pattern that matches NOTHING makes the watcher think the box is idle and terminate
+# it out from under a live run.
+WATCH_PAT=${WATCH_PAT:-train_sae_res.py}
 LOG_DIR=${LOG_DIR:-/workspace/logs}
 SCRATCH=${SCRATCH:-/dev/shm}
 : "${HF_TOKEN:?export HF_TOKEN=hf_xxx (write scope) -- needed to archive the logs}"
 : "${ARCHIVE_REPO:?export ARCHIVE_REPO=<an HF repo you own> -- where the log tarball goes}"
 
-echo "[watcher] started $(date -u +%FT%TZ); polling every ${POLL}s"
+echo "[watcher] started $(date -u +%FT%TZ); polling every ${POLL}s for '$WATCH_PAT'"
 echo "[watcher] pod=${RUNPOD_POD_ID:-<unknown>}"
 
 # ---- 1. wait for the fleet to drain -------------------------------------------------------
 while true; do
-    n=$(pgrep -f train_sae_res.py | wc -l | tr -d ' ')   # `pgrep -c` is not portable
+    n=$(pgrep -f "$WATCH_PAT" | wc -l | tr -d ' ')   # `pgrep -c` is not portable
     [ "${n:-0}" -eq 0 ] && break
-    echo "[watcher] $(date -u +%FT%TZ)  $n training process(es) still alive"
+    echo "[watcher] $(date -u +%FT%TZ)  $n process(es) matching '$WATCH_PAT' still alive"
     sleep "$POLL"
 done
 echo "[watcher] $(date -u +%FT%TZ)  fleet drained"
