@@ -22,6 +22,19 @@ artifacts live in per-arm HF repos (`…-trained-20m` / `…-rand-all-s0`), guar
   via the exact identity FVU_h = FVU_r · Var(r)/Var(h)).
 - **Caveats:** n=1 random seed; reconstruction only; hybrid/outbias untested on random.
 
+## Possibility-2 retrain (is the auto-interp non-replication just undertraining?)
+
+Heap et al. trained TopK SAEs at k=32, expansion factor 16–128, 100M RedPajama tokens; our
+20M-token, ~7x-dict SAEs sit outside that range on both axes. `launch_replication.sh` retrains
+both arms at the paper recipe — k=32, d_sae=73728 (R=32), 100M tokens — plus a 20M LR sweep
+{1e-4, 4e-4, 1e-3} on the random arm (the 4e-4 point falls out of the 100M run's t20M
+milestone). train_sae_res.py now tags non-default configs into filenames
+(`sae_full_k32_d73728_100M_final.pt`) so these coexist with the 20M/16k artifacts in the same
+per-arm repos, and pushes frozen milestone ckpts every 20M tokens (`…_t20M.pt`, …) so
+auto-interp can be scored **vs training tokens**: if the random arm's score is still climbing
+at 100M, undertraining was the story; if it is flat, possibility 3 gets more weight. Eval
+scripts reach a tagged run via `SUFFIX=_d73728_100M` (+ `K=32`).
+
 ## Pipeline files
 
 | file | what it does |

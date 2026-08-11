@@ -10,17 +10,29 @@ from hf_io import push, pull                                         # artifacts
 MODEL_NAME = "google/gemma-2-2b"
 LAYER=13
 D_IN=2304
-D_SAE=16384
-K    = int(os.environ.get("K", 64))        # sweep: K=32 MODE=full python train_sae_res.py
-LR=4e-4
+D_SAE = int(os.environ.get("D_SAE", 16384))   # replication runs: D_SAE=73728 (expansion factor 32)
+K     = int(os.environ.get("K", 64))          # sweep: K=32 MODE=full python train_sae_res.py
+LR    = float(os.environ.get("LR", 4e-4))     # sweep: LR=1e-4 / 1e-3
 BATCH = 4096
 MODE = os.environ.get("MODE", "hybrid")    # "full" | "resid" | "hybrid" | "outbias"
 SEED = int(os.environ.get("SEED", 0))      # reproducibility across the sweep fleet
 TRAIN_TOKENS = int(os.environ.get("TRAIN_TOKENS", 20_000_000))  # cap training length (FVU converges by ~20M)
 BUFFER_TOKENS = int(os.environ.get("BUFFER_TOKENS", 1_000_000))  # rolling shuffle buffer for the activation stream
 PUSH_EVERY    = int(os.environ.get("PUSH_EVERY", 10_000))        # push the rolling checkpoint to HF every N steps
+CKPT_TOKENS   = int(os.environ.get("CKPT_TOKENS", 20_000_000))   # push a frozen milestone ckpt every N tokens (0 = off)
 OUT_DIR = os.environ.get("OUT_DIR", "/workspace/out")            # local scratch (ephemeral); the real home is HF
 os.makedirs(OUT_DIR, exist_ok=True)
+
+# Non-default d_sae / LR / token budget are encoded into the artifact names: hf_io.py guards
+# ARMS against cross-writes, but nothing guards CONFIGS, and e.g. a d_sae=73728 run at K=32
+# would otherwise overwrite the old 16k-dict sae_full_k32_final.pt. Historical defaults
+# produce the historical names unchanged. Eval scripts point at a tagged run via SUFFIX.
+SUFFIX = ""
+if D_SAE != 16384:              SUFFIX += f"_d{D_SAE}"
+if LR != 4e-4:                  SUFFIX += f"_lr{LR:g}"
+if TRAIN_TOKENS != 20_000_000:  SUFFIX += f"_{TRAIN_TOKENS // 1_000_000}M"
+BASE = f"sae_{MODE}_k{K}{SUFFIX}"
+print(f"[train] artifact base name: {BASE}")
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 model = load_model(device)                 # kept resident: activations are generated live during training
@@ -80,6 +92,7 @@ n_since_fired = t.zeros(D_SAE, device=device)
 DEAD_WINDOW = 200
 N = 100
 seen_tokens = 0
+next_milestone = CKPT_TOKENS if CKPT_TOKENS else None
 for step, (h_batch, tok_batch) in enumerate(iter_batches()):
     dead = n_since_fired > DEAD_WINDOW
 
@@ -145,12 +158,24 @@ for step, (h_batch, tok_batch) in enumerate(iter_batches()):
         }
         if MODE in ("hybrid", "outbias"):
             ckpt["linear_map"] = linear_map.state_dict()   # JOINTLY-TRAINED map; differs from the frozen P.pt
-        latest_path = f"{OUT_DIR}/sae_{MODE}_k{K}_latest.pt"
+        latest_path = f"{OUT_DIR}/{BASE}_latest.pt"
         t.save(ckpt, latest_path)
         if step > 0 and step % PUSH_EVERY == 0:
             push(latest_path)   # bare pod has no persistent disk -- park a resume point on HF
 
     seen_tokens += h_batch.shape[0]
+    # Frozen milestone snapshots at fixed token counts (the _latest file overwrites itself, so it
+    # can't feed an auto-interp-vs-training-tokens curve). The final budget is saved as _final.
+    if next_milestone and seen_tokens >= next_milestone and next_milestone < TRAIN_TOKENS:
+        m_ckpt = {"sae": sae.state_dict(), "cfg": sae.cfg, "scale": scale,
+                  "step": step, "mode": MODE, "tokens": next_milestone}
+        if MODE in ("hybrid", "outbias"):
+            m_ckpt["linear_map"] = linear_map.state_dict()
+        m_path = f"{OUT_DIR}/{BASE}_t{next_milestone // 1_000_000}M.pt"
+        t.save(m_ckpt, m_path)
+        push(m_path)
+        os.remove(m_path)   # it lives on HF now; four of these would eat the small Volume Disk
+        next_milestone += CKPT_TOKENS
     if seen_tokens >= TRAIN_TOKENS:        # stop once the token budget is hit
         break
 
@@ -169,9 +194,9 @@ if MODE in ("hybrid", "outbias"):
 p_path = None
 if MODE in ("hybrid", "outbias"):
     with t.no_grad():
-        p_path = f"{OUT_DIR}/P_{MODE}_k{K}.pt"
+        p_path = f"{OUT_DIR}/P_{MODE}_k{K}{SUFFIX}.pt"
         t.save(linear_map(embed_W.float()), p_path)
-final_path = f"{OUT_DIR}/sae_{MODE}_k{K}_final.pt"
+final_path = f"{OUT_DIR}/{BASE}_final.pt"
 t.save(final_ckpt, final_path)
 
 # push results to HF so they're never trapped on a pod's ephemeral disk

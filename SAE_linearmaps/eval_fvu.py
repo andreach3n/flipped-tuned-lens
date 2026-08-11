@@ -34,6 +34,7 @@ from activations import load_model, activation_stream, D_IN, LAYER, VARIANT, INI
 from hf_io import push, pull
 
 K_SAE    = int(os.environ.get("K", 64))
+SUFFIX   = os.environ.get("SUFFIX", "")                 # tagged runs, e.g. _d73728_100M (see train_sae_res.py)
 N_TOKENS = int(os.environ.get("N_TOKENS", 2_000_000))   # FVU converges fast; 2M is plenty
 BATCH    = int(os.environ.get("BATCH", 8192))
 SEED     = int(os.environ.get("SEED", 7))               # != training's 0 -> effectively held-out docs
@@ -64,8 +65,8 @@ def try_load(name):
         return None
 
 
-sae_full,  scale_full,  _ = load_sae(f"sae_full_k{K_SAE}_final.pt")
-sae_resid, scale_resid, _ = load_sae(f"sae_resid_k{K_SAE}_final.pt")
+sae_full,  scale_full,  _ = load_sae(f"sae_full_k{K_SAE}{SUFFIX}_final.pt")
+sae_resid, scale_resid, _ = load_sae(f"sae_resid_k{K_SAE}{SUFFIX}_final.pt")
 
 # The frozen greedy map, rebuilt into a (V, 2304) lookup exactly as train_sae_res.py does.
 # P.pt is NOT read from disk -- it is pure scratch there and gets deleted between runs.
@@ -78,8 +79,8 @@ with t.no_grad():
 
 # hybrid / outbias are optional -- included only if this arm has them (same guarded pattern as before).
 # Their P table comes from the checkpoint's JOINTLY-TRAINED map, not the frozen one above.
-_hyb = try_load(f"sae_hybrid_k{K_SAE}_final.pt")
-_out = try_load(f"sae_outbias_k{K_SAE}_final.pt")
+_hyb = try_load(f"sae_hybrid_k{K_SAE}{SUFFIX}_final.pt")
+_out = try_load(f"sae_outbias_k{K_SAE}{SUFFIX}_final.pt")
 
 
 def _trained_P(ckpt, emb):
@@ -203,7 +204,7 @@ if HAVE_OUTBIAS:
     print(f"{'FVU on h  - outbias':32s} {of_:>9.4f} {oc_:>9.4f}")
     results["fvu_h_outbias"] = {"flat": of_, "centred": oc_}
 
-path = f"{OUT_DIR}/fvu_{VARIANT}_s{INIT_SEED}_k{K_SAE}.json"
+path = f"{OUT_DIR}/fvu_{VARIANT}_s{INIT_SEED}_k{K_SAE}{SUFFIX}.json"
 with open(path, "w") as f:
     json.dump(results, f, indent=2)
 print(f"\nsaved {path}")
