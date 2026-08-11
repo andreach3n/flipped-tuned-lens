@@ -12,7 +12,21 @@ import os
 from huggingface_hub import HfApi, hf_hub_download, create_repo
 
 DEFAULT_REPO = "andreayhchen/gemma2-2b-linearmap-saes"   # the TRAINED-arm artifacts
-HF_REPO = os.environ.get("HF_REPO", DEFAULT_REPO)
+
+# HF_REPO set but BLANK is the reconnect footgun: `HF_REPO=$RAND_REPO` in a shell that lost its
+# exports expands to "" and hf_hub_download then dies on an opaque "Repo id must use alphanumeric
+# chars ... : ''". Do NOT "fix" that by treating blank as unset -- falling back to DEFAULT_REPO
+# would silently PULL THE TRAINED ARM's map/SAEs into a random-arm run, which is exactly the
+# silent-wrong-artifact failure this module exists to prevent. Fail loudly instead.
+_env_repo = os.environ.get("HF_REPO")
+if _env_repo is not None and not _env_repo.strip():
+    raise RuntimeError(
+        "HF_REPO is set but EMPTY -- an unset shell variable got expanded (e.g. HF_REPO=$RAND_REPO "
+        "after an ssh reconnect). Refusing to fall back to the default repo, which would read the "
+        "WRONG ARM's artifacts. Re-export the per-arm repo, e.g.\n"
+        f"    export HF_REPO={DEFAULT_REPO}-rand-all-s0"
+    )
+HF_REPO = _env_repo or DEFAULT_REPO
 _api = HfApi()
 _repo_ready = False
 
