@@ -4,7 +4,9 @@
 #   bash setup.sh
 set -e
 
-python -m pip install -q -r SAE_linearmaps/requirements.txt
+# NOT -q: this step pulls a 2-3 GB torch wheel and takes 5-15 min. Quiet mode hides pip's
+# progress bars, which makes a healthy install look like a hung pod.
+python -m pip install -r SAE_linearmaps/requirements.txt
 python -m pip uninstall -y torchvision torchaudio   # unused here; a torch-version mismatch makes them crash transformers
 python -m spacy download en_core_web_sm || echo "(spaCy model skipped -- only the probe's syntactic panel needs it)"
 
