@@ -34,18 +34,21 @@ from autointerp_common import (CELLS, cell_name, DETECT_SYSTEM, FUZZ_SYSTEM,
                                numbered_block, ratings_schema, auroc, mean)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-FEATURES = os.environ.get("FEATURES_FILE", os.path.join(BASE, "autointerp_features.json"))
-EXPLANATIONS = os.path.join(BASE, "autointerp_explanations.json")
+TAG = os.environ.get("TAG", "")   # match autointerp_collect.py SUFFIX, e.g. _d73728_100M.
+# Every artifact below carries it so a new round cannot overwrite the previous round's
+# explanations/scores/batch-ids (all tracked in git). Default "" = historical names.
+FEATURES = os.environ.get("FEATURES_FILE", os.path.join(BASE, f"autointerp_features{TAG}.json"))
+EXPLANATIONS = os.path.join(BASE, f"autointerp_explanations{TAG}.json")
 MODEL = os.environ.get("OPENAI_JUDGE_MODEL", "gpt-5.6-terra")
 REASONING = os.environ.get("REASONING", "low")
 MAX_OUT = int(os.environ.get("MAX_OUT", 1200))     # 24 ints + low reasoning; 2500 was overkill
 CHUNK = int(os.environ.get("CHUNK", 300))          # batch-queue cap: see autointerp_explain.py
 RUN_STATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "autointerp_score_run_state.txt")
 SEED = int(os.environ.get("SEED", 0))
-SCORE_KEY = os.path.join(BASE, "autointerp_score_key.json")     # custom_id -> true labels
-SCORES_OUT = os.path.join(BASE, "autointerp_scores.json")
-BATCH_ID_FILE = os.path.join(BASE, "autointerp_score_batch_id.txt")
-BATCH_INPUT = os.path.join(BASE, "autointerp_score_batch.jsonl")
+SCORE_KEY = os.path.join(BASE, f"autointerp_score_key{TAG}.json")     # custom_id -> true labels
+SCORES_OUT = os.path.join(BASE, f"autointerp_scores{TAG}.json")
+BATCH_ID_FILE = os.path.join(BASE, f"autointerp_score_batch_id{TAG}.txt")
+BATCH_INPUT = os.path.join(BASE, f"autointerp_score_batch{TAG}.jsonl")
 
 PRICES = {"gpt-5.6-sol": (5.00e-6, 30.0e-6), "gpt-5.6-terra": (2.50e-6, 15.0e-6),
           "gpt-5.6-luna": (1.00e-6, 6.0e-6), "gpt-5.4-mini": (0.75e-6, 4.5e-6)}
@@ -230,7 +233,7 @@ def analyze():
               ["fuzzing", "detection"], loc="lower left", frameon=False, fontsize=8.5)
     ax.set_title("Explain-then-classify autointerp (following Paulo et al. 2024)",
                  fontsize=11, fontweight="bold", color=INK, loc="left")
-    out = os.path.join(BASE, "plots", "autointerp_auroc.png")
+    out = os.path.join(BASE, "plots", f"autointerp_auroc{TAG}.png")
     os.makedirs(os.path.dirname(out), exist_ok=True)
     fig.tight_layout()
     fig.savefig(out, bbox_inches="tight")

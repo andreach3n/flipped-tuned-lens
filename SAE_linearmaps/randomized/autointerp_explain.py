@@ -29,7 +29,10 @@ except ImportError:
 from autointerp_common import EXPLAIN_SYSTEM, EXPLANATION_SCHEMA
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-FEATURES = os.environ.get("FEATURES_FILE", os.path.join(BASE, "autointerp_features.json"))
+TAG = os.environ.get("TAG", "")   # match autointerp_collect.py SUFFIX, e.g. _d73728_100M.
+# Every artifact below carries it so a new round cannot overwrite the previous round's
+# explanations/scores/batch-ids (all tracked in git). Default "" = historical names.
+FEATURES = os.environ.get("FEATURES_FILE", os.path.join(BASE, f"autointerp_features{TAG}.json"))
 MODEL = os.environ.get("OPENAI_JUDGE_MODEL", "gpt-5.6-terra")
 REASONING = os.environ.get("REASONING", "low")
 MAX_OUT = int(os.environ.get("MAX_OUT", 1000))     # pilot showed ~380 out/req; 1000 is ample
@@ -38,10 +41,10 @@ MAX_OUT = int(os.environ.get("MAX_OUT", 1000))     # pilot showed ~380 out/req; 
 # submits CHUNK requests at a time, polls each to completion, harvests, then submits the
 # next -- incremental saves make it crash/disconnect-safe (rerun `run` to resume).
 CHUNK = int(os.environ.get("CHUNK", 300))
-EXPL_OUT = os.path.join(BASE, "autointerp_explanations.json")
-RUN_STATE = os.path.join(BASE, "autointerp_explain_run_state.txt")
-BATCH_ID_FILE = os.path.join(BASE, "autointerp_explain_batch_id.txt")
-BATCH_INPUT = os.path.join(BASE, "autointerp_explain_batch.jsonl")
+EXPL_OUT = os.path.join(BASE, f"autointerp_explanations{TAG}.json")
+RUN_STATE = os.path.join(BASE, f"autointerp_explain_run_state{TAG}.txt")
+BATCH_ID_FILE = os.path.join(BASE, f"autointerp_explain_batch_id{TAG}.txt")
+BATCH_INPUT = os.path.join(BASE, f"autointerp_explain_batch{TAG}.jsonl")
 
 PRICES = {"gpt-5.6-sol": (5.00e-6, 30.0e-6), "gpt-5.6-terra": (2.50e-6, 15.0e-6),
           "gpt-5.6-luna": (1.00e-6, 6.0e-6), "gpt-5.4-mini": (0.75e-6, 4.5e-6)}
@@ -51,7 +54,7 @@ def load_features():
     if not os.path.exists(FEATURES):
         from hf_io import pull   # fall back to HF (HF_TOKEN in .env works here too)
         repo = os.environ.get("TRAINED_REPO", "andreayhchen/gemma2-2b-linearmap-saes-trained-20m")
-        path = pull("autointerp_features.json", repo=repo)
+        path = pull(f"autointerp_features{TAG}.json", repo=repo)
         with open(path) as f:
             return json.load(f)
     with open(FEATURES) as f:
