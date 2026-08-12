@@ -40,8 +40,9 @@ from autointerp_common import (CELLS, cell_name, stratified_sample, print_plan,
                                split_examples)
 
 PASS         = os.environ.get("PASS", "freq")
-MODES        = ["full", "resid"]
+MODES        = os.environ.get("MODES", "full,resid").split(",")   # e.g. MODES=full for the cheap pass
 K_SAE        = int(os.environ.get("K", 64))
+SUFFIX       = os.environ.get("SUFFIX", "")   # tagged runs, e.g. _d73728_100M (see train_sae_res.py)
 TRAINED_REPO = os.environ.get("TRAINED_REPO", "andreayhchen/gemma2-2b-linearmap-saes-trained-20m")
 RAND_REPO    = os.environ.get("RAND_REPO",    "andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0")
 OUT_DIR      = os.environ.get("OUT_DIR", "/workspace/out")
@@ -64,8 +65,11 @@ ARM = "trained" if VARIANT == "trained" else VARIANT
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 print(f"[autointerp_collect] PASS={PASS} VARIANT={VARIANT} INIT_SEED={INIT_SEED} arm={ARM}")
 
-FREQ_FILE = "autointerp_freq.pt"
-SEL_FILE = "autointerp_selection.json"
+# EVERY artifact carries SUFFIX. Without this a k=32/d73728 run would overwrite the 20M/16k
+# run's freq/selection/blind/key files in the SAME repos -- destroying the provenance of the
+# very result the new SAEs are being compared against. Default "" reproduces historical names.
+FREQ_FILE = f"autointerp_freq{SUFFIX}.pt"
+SEL_FILE  = f"autointerp_selection{SUFFIX}.json"
 
 
 def load_sae(name):
@@ -80,7 +84,7 @@ def load_sae(name):
 def load_arm_saes(model):
     """This arm's full+resid SAEs and the frozen P table, exactly as eval_fvu.py builds them."""
     import torch.nn as nn
-    saes = {m: load_sae(f"sae_{m}_k{K_SAE}_final.pt") for m in MODES}
+    saes = {m: load_sae(f"sae_{m}_k{K_SAE}{SUFFIX}_final.pt") for m in MODES}
     lm = nn.Linear(D_IN, D_IN).to(device)
     lm.load_state_dict(t.load(pull("linear_map_layer_13.pt"), weights_only=False))
     lm.eval()
@@ -296,7 +300,7 @@ def emit(sel_ids, state, pool, tokenizer):
         n_thin = sum(1 for f in out[cell].values() if len(f["detect_pos"]) < 6)
         print(f"  {cell}: {len(out[cell])} features emitted ({n_thin} with <6 detection positives)")
 
-    path = f"{OUT_DIR}/autointerp_examples_{ARM}.json"
+    path = f"{OUT_DIR}/autointerp_examples_{ARM}{SUFFIX}.json"
     with open(path, "w") as f:
         json.dump(out, f, ensure_ascii=False)
     push(path)
@@ -307,9 +311,9 @@ def pass_finalize():
     import random
     merged = {}
     for arm, repo in (("trained", TRAINED_REPO), ("rand_all", RAND_REPO)):
-        merged.update(json.loads(open(pull(f"autointerp_examples_{arm}.json", repo=repo)).read()))
+        merged.update(json.loads(open(pull(f"autointerp_examples_{arm}{SUFFIX}.json", repo=repo)).read()))
 
-    feat_path = f"{OUT_DIR}/autointerp_features.json"
+    feat_path = f"{OUT_DIR}/autointerp_features{SUFFIX}.json"
     with open(feat_path, "w") as f:
         json.dump(merged, f, ensure_ascii=False)
 
@@ -324,7 +328,7 @@ def pass_finalize():
         blind.append({"id": aid, "peak": d["rubric_peak"], "typical": d["rubric_typical"]})
         key[aid] = {"sae": cell, "feat": int(fid), "freq": d["n_firings_scan"],
                     "freq_bin": "", "nd": None, "nd_peak": None}
-    b_path, k_path = f"{OUT_DIR}/autointerp_blind.json", f"{OUT_DIR}/autointerp_key.json"
+    b_path, k_path = f"{OUT_DIR}/autointerp_blind{SUFFIX}.json", f"{OUT_DIR}/autointerp_key{SUFFIX}.json"
     with open(b_path, "w") as f:
         json.dump(blind, f, ensure_ascii=False)
     with open(k_path, "w") as f:
