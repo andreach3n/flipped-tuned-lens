@@ -3,8 +3,14 @@
 Mirrors judge_features.py's machinery (same auth, same subcommands, same Batch flow):
   python autointerp_explain.py estimate   # paid mini-pilot -> cost projection
   python autointerp_explain.py pilot      # print a few explanations for eyeballing
-  python autointerp_explain.py submit     # upload the Batch job
-  python autointerp_explain.py collect    # poll + write autointerp_explanations.json
+  python autointerp_explain.py run        # <- USE THIS: chunked, resumable, respects CHUNK
+  python autointerp_explain.py submit     # one single batch; IGNORES CHUNK -- small jobs only
+  python autointerp_explain.py collect    # poll the last `submit` batch
+
+`submit` enqueues EVERY request as one batch. OpenAI counts input + max_output per queued
+request (~2.2k tokens each here), so anything past a few hundred latents blows the org's
+enqueued-token cap and the batch is rejected whole -- CHUNK does nothing to help, because
+only `run` chunks. 2,080 latents needs `run` with CHUNK<=400.
 
 Input: autointerp_features.json (from autointerp_collect.py PASS=finalize; pulled from HF
 if missing). Runs on the Mac — OPENAI_API_KEY from the gitignored .env, never on the pod.
