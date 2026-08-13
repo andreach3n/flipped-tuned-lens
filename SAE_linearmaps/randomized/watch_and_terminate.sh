@@ -31,6 +31,10 @@ POLL=${POLL:-300}                       # seconds between checks
 # it out from under a live run.
 WATCH_PAT=${WATCH_PAT:-train_sae_res.py}
 LOG_DIR=${LOG_DIR:-/workspace/logs}
+# UNIQUE per invocation. This was a fixed "logs_100M_runs.tar.gz", so the second pod to run this
+# script silently OVERWROTE the first pod's archived logs on HF (the 100M training logs were lost
+# that way on 2026-08-12 and had to be recovered from a local copy). Never reuse the name.
+ARCHIVE_NAME=${ARCHIVE_NAME:-logs_$(date -u +%Y%m%dT%H%M%SZ).tar.gz}
 SCRATCH=${SCRATCH:-/dev/shm}
 : "${HF_TOKEN:?export HF_TOKEN=hf_xxx (write scope) -- needed to archive the logs}"
 : "${ARCHIVE_REPO:?export ARCHIVE_REPO=<an HF repo you own> -- where the log tarball goes}"
@@ -54,6 +58,7 @@ find "$SCRATCH" -maxdepth 2 -name '*_final.pt' 2>/dev/null | sed 's/^/  /'
 grep -il "traceback\|out of memory" "$LOG_DIR"/*.log 2>/dev/null | sed 's/^/  [FAILED] /'
 
 # ---- 3. archive the logs (they die with the pod; the SAEs are already on HF) ---------------
+export ARCHIVE_NAME
 python - <<'PY'
 import os, tarfile, sys
 try:
@@ -61,9 +66,9 @@ try:
     tar = "/tmp/run_logs.tar.gz"
     with tarfile.open(tar, "w:gz") as t:
         t.add(os.environ.get("LOG_DIR", "/workspace/logs"), arcname="logs")
-    HfApi().upload_file(path_or_fileobj=tar, path_in_repo="logs_100M_runs.tar.gz",
+    HfApi().upload_file(path_or_fileobj=tar, path_in_repo=os.environ["ARCHIVE_NAME"],
                         repo_id=os.environ["ARCHIVE_REPO"], repo_type="model")
-    print("[watcher] logs archived -> " + os.environ["ARCHIVE_REPO"])
+    print(f"[watcher] logs archived -> {os.environ['ARCHIVE_REPO']}/{os.environ['ARCHIVE_NAME']}")
 except Exception as e:
     print(f"[watcher] LOG ARCHIVE FAILED ({type(e).__name__}: {e})", file=sys.stderr)
     sys.exit(1)

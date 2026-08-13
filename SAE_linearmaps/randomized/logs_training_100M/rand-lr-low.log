@@ -1,0 +1,433 @@
+nohup: ignoring input
+[launch] run=rand-lr-low OUT_DIR=/dev/shm/out_rand-lr-low CUDA_VISIBLE_DEVICES=4
+[train] artifact base name: sae_full_k32_d73728_lr0.0001
+[activations] VARIANT=rand_all INIT_SEED=0: randomizing gemma weights
+Loading weights:   0%|          | 0/288 [00:00<?, ?it/s]Loading weights:  44%|████▍     | 126/288 [00:00<00:00, 1248.72it/s]Loading weights:  87%|████████▋ | 251/288 [00:00<00:00, 1054.97it/s]Loading weights: 100%|██████████| 288/288 [00:00<00:00, 1078.64it/s]
+  re-initialized 288 parameter tensors (seed=0); embeddings included
+Loaded pretrained model google/gemma-2-2b into HookedTransformer
+Moving model to device:  cuda
+  h_13 check: |h| mean 317.00 | var 43.6235 | max|dim var| 64.3964
+  ↓ pulled linear_map_layer_13.pt <- andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+linear-map explained variance on sample: 0.3212
+step      0 | loss 2293.161 | FVU 0.996 | L0 32.0 | dead 0
+step    100 | loss 1752.411 | FVU 0.761 | L0 32.0 | dead 0
+step    200 | loss 1641.762 | FVU 0.713 | L0 32.0 | dead 0
+step    300 | loss 2506.425 | FVU 0.699 | L0 32.0 | dead 72743
+step    400 | loss 2315.621 | FVU 0.667 | L0 32.0 | dead 72506
+step    500 | loss 2232.900 | FVU 0.644 | L0 32.0 | dead 72226
+step    600 | loss 2097.846 | FVU 0.611 | L0 32.0 | dead 72117
+step    700 | loss 2042.175 | FVU 0.593 | L0 32.0 | dead 71702
+step    800 | loss 2273.421 | FVU 0.604 | L0 32.0 | dead 70719
+step    900 | loss 2215.101 | FVU 0.588 | L0 32.0 | dead 69956
+step   1000 | loss 2272.539 | FVU 0.598 | L0 32.0 | dead 69383
+step   1100 | loss 2181.161 | FVU 0.579 | L0 32.0 | dead 68661
+step   1200 | loss 2199.162 | FVU 0.573 | L0 32.0 | dead 67836
+step   1300 | loss 2188.249 | FVU 0.577 | L0 32.0 | dead 66990
+step   1400 | loss 2124.340 | FVU 0.560 | L0 32.0 | dead 66099
+step   1500 | loss 2207.161 | FVU 0.578 | L0 32.0 | dead 65554
+step   1600 | loss 2123.041 | FVU 0.557 | L0 32.0 | dead 64654
+step   1700 | loss 2066.986 | FVU 0.543 | L0 32.0 | dead 63909
+step   1800 | loss 2099.715 | FVU 0.558 | L0 32.0 | dead 62972
+step   1900 | loss 2061.591 | FVU 0.541 | L0 32.0 | dead 62069
+step   2000 | loss 2133.694 | FVU 0.563 | L0 32.0 | dead 61492
+step   2100 | loss 2012.589 | FVU 0.538 | L0 32.0 | dead 60422
+step   2200 | loss 1934.347 | FVU 0.516 | L0 32.0 | dead 59696
+step   2300 | loss 2005.276 | FVU 0.545 | L0 32.0 | dead 58835
+step   2400 | loss 1942.058 | FVU 0.518 | L0 32.0 | dead 57825
+step   2500 | loss 2047.932 | FVU 0.548 | L0 32.0 | dead 57003
+step   2600 | loss 1879.639 | FVU 0.515 | L0 32.0 | dead 55707
+step   2700 | loss 2076.625 | FVU 0.562 | L0 32.0 | dead 54650
+step   2800 | loss 1920.504 | FVU 0.521 | L0 32.0 | dead 53466
+step   2900 | loss 1812.415 | FVU 0.485 | L0 32.0 | dead 52543
+step   3000 | loss 1969.904 | FVU 0.531 | L0 32.0 | dead 51430
+step   3100 | loss 1809.406 | FVU 0.486 | L0 32.0 | dead 49432
+step   3200 | loss 2066.617 | FVU 0.541 | L0 32.0 | dead 48231
+step   3300 | loss 1793.052 | FVU 0.489 | L0 32.0 | dead 46202
+step   3400 | loss 1645.940 | FVU 0.433 | L0 32.0 | dead 44626
+step   3500 | loss 1928.939 | FVU 0.517 | L0 32.0 | dead 42607
+step   3600 | loss 1717.078 | FVU 0.448 | L0 32.0 | dead 39869
+step   3700 | loss 2041.630 | FVU 0.528 | L0 32.0 | dead 39310
+step   3800 | loss 1775.408 | FVU 0.467 | L0 32.0 | dead 36451
+step   3900 | loss 1619.265 | FVU 0.416 | L0 32.0 | dead 36347
+step   4000 | loss 1849.819 | FVU 0.490 | L0 32.0 | dead 33888
+step   4100 | loss 1702.209 | FVU 0.429 | L0 32.0 | dead 31788
+step   4200 | loss 1980.385 | FVU 0.515 | L0 32.0 | dead 31691
+step   4300 | loss 1752.401 | FVU 0.454 | L0 32.0 | dead 28930
+step   4400 | loss 1574.411 | FVU 0.404 | L0 32.0 | dead 29563
+step   4500 | loss 1846.716 | FVU 0.484 | L0 32.0 | dead 27345
+step   4600 | loss 1725.070 | FVU 0.427 | L0 32.0 | dead 26561
+step   4700 | loss 1922.961 | FVU 0.504 | L0 32.0 | dead 26523
+step   4800 | loss 1732.637 | FVU 0.446 | L0 32.0 | dead 24410
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ..._d73728_lr0.0001_final.pt:   0%|          |  551kB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:   0%|          |  551kB / 1.36GB            [A[AProcessing Files (0 / 1)      :   0%|          |  551kB / 1.36GB, 54.1kB/s  
+New Data Upload               :   1%|          |  551kB / 67.0MB, 54.1kB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   0%|          |  551kB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:   0%|          |  551kB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:   0%|          |  551kB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:   0%|          |  551kB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:   0%|          | 2.20MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   0%|          | 2.20MB / 1.36GB,  212kB/s  
+New Data Upload               :   2%|▏         | 2.20MB /  134MB,  212kB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   0%|          | 3.86MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   0%|          | 3.86MB / 1.36GB,  369kB/s  
+New Data Upload               :   3%|▎         | 3.86MB /  134MB,  369kB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   1%|          | 7.17MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   1%|          | 7.17MB / 1.36GB,  684kB/s  
+New Data Upload               :   5%|▌         | 7.17MB /  134MB,  684kB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   1%|          | 14.9MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   1%|          | 14.9MB / 1.36GB, 1.42MB/s  
+New Data Upload               :  11%|█         | 14.9MB /  134MB, 1.42MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   2%|▏         | 21.5MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   2%|▏         | 21.5MB / 1.36GB, 2.04MB/s  
+New Data Upload               :  11%|█         | 21.5MB /  201MB, 2.04MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   3%|▎         | 45.2MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   3%|▎         | 45.2MB / 1.36GB, 4.28MB/s  
+New Data Upload               :  22%|██▏       | 45.2MB /  201MB, 4.28MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   5%|▌         | 69.2MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   5%|▌         | 69.2MB / 1.36GB, 6.53MB/s  
+New Data Upload               :  34%|███▍      | 69.2MB /  201MB, 6.53MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   5%|▌         | 70.3MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   5%|▌         | 70.3MB / 1.36GB, 6.57MB/s  
+New Data Upload               :  35%|███▍      | 70.3MB /  201MB, 6.57MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   5%|▌         | 73.6MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   5%|▌         | 73.6MB / 1.36GB, 6.82MB/s  
+New Data Upload               :  37%|███▋      | 73.6MB /  201MB, 6.82MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   6%|▌         | 81.4MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   6%|▌         | 81.4MB / 1.36GB, 7.49MB/s  
+New Data Upload               :  40%|████      | 81.4MB /  201MB, 7.49MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   6%|▋         | 88.0MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   6%|▋         | 88.0MB / 1.36GB, 8.04MB/s  
+New Data Upload               :  44%|████▎     | 88.0MB /  201MB, 8.04MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:   8%|▊         |  111MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   8%|▊         |  111MB / 1.36GB, 10.1MB/s  
+New Data Upload               :  55%|█████▌    |  111MB /  201MB, 10.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  10%|▉         |  134MB / 1.36GB, 12.2MB/s  
+New Data Upload               :  67%|██████▋   |  134MB /  201MB, 12.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  14%|█▍        |  197MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  14%|█▍        |  197MB / 1.36GB, 16.1MB/s  
+New Data Upload               :  98%|█████████▊|  197MB /  201MB, 16.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▍        |  201MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  15%|█▍        |  201MB / 1.36GB, 16.3MB/s  
+New Data Upload               : 100%|█████████▉|  201MB /  201MB, 16.3MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▍        |  201MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▍        |  202MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  15%|█▍        |  202MB / 1.36GB, 16.1MB/s  
+New Data Upload               :  75%|███████▌  |  202MB /  268MB, 16.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▍        |  202MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▍        |  202MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  15%|█▍        |  202MB / 1.36GB, 15.8MB/s  
+New Data Upload               :  75%|███████▌  |  202MB /  268MB, 15.8MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▍        |  202MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▍        |  202MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  15%|█▍        |  202MB / 1.36GB, 15.5MB/s  
+New Data Upload               :  75%|███████▌  |  202MB /  268MB, 15.5MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▌        |  204MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  15%|█▌        |  204MB / 1.36GB, 15.6MB/s  
+New Data Upload               :  76%|███████▌  |  204MB /  268MB, 15.6MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  15%|█▌        |  208MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  15%|█▌        |  208MB / 1.36GB, 15.8MB/s  
+New Data Upload               :  62%|██████▏   |  208MB /  335MB, 15.8MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  19%|█▊        |  253MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  19%|█▊        |  253MB / 1.36GB, 19.6MB/s  
+New Data Upload               :  75%|███████▌  |  253MB /  335MB, 19.6MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  21%|██▏       |  290MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  21%|██▏       |  290MB / 1.36GB, 22.7MB/s  
+New Data Upload               :  86%|████████▋ |  290MB /  335MB, 22.7MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  23%|██▎       |  313MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  23%|██▎       |  313MB / 1.36GB, 24.5MB/s  
+New Data Upload               :  93%|█████████▎|  313MB /  335MB, 24.5MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  25%|██▍       |  335MB / 1.36GB, 26.3MB/s  
+New Data Upload               : 100%|█████████▉|  335MB /  335MB, 26.3MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  336MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  25%|██▍       |  336MB / 1.36GB, 25.4MB/s  
+New Data Upload               :  83%|████████▎ |  336MB /  402MB, 25.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  336MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  336MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  336MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  336MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  337MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  25%|██▍       |  337MB / 1.36GB, 24.4MB/s  
+New Data Upload               :  84%|████████▍ |  337MB /  402MB, 24.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▍       |  340MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  25%|██▍       |  340MB / 1.36GB, 24.4MB/s  
+New Data Upload               :  84%|████████▍ |  340MB /  402MB, 24.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  25%|██▌       |  342MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  25%|██▌       |  342MB / 1.36GB, 24.4MB/s  
+New Data Upload               :  85%|████████▍ |  342MB /  402MB, 24.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  26%|██▌       |  350MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  26%|██▌       |  350MB / 1.36GB, 24.9MB/s  
+New Data Upload               :  87%|████████▋ |  350MB /  402MB, 24.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  27%|██▋       |  366MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  27%|██▋       |  366MB / 1.36GB, 26.1MB/s  
+New Data Upload               :  78%|███████▊  |  366MB /  469MB, 26.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  34%|███▍      |  461MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  34%|███▍      |  461MB / 1.36GB, 34.0MB/s  
+New Data Upload               :  98%|█████████▊|  461MB /  469MB, 34.0MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  35%|███▍      |  469MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  35%|███▍      |  469MB / 1.36GB, 34.4MB/s  
+New Data Upload               :  87%|████████▋ |  469MB /  536MB, 34.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  35%|███▍      |  469MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  35%|███▍      |  469MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  35%|███▍      |  469MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  35%|███▍      |  470MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  35%|███▍      |  470MB / 1.36GB, 33.3MB/s  
+New Data Upload               :  88%|████████▊ |  470MB /  536MB, 33.3MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  35%|███▍      |  470MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  35%|███▍      |  470MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  35%|███▍      |  470MB / 1.36GB, 32.7MB/s  
+New Data Upload               :  78%|███████▊  |  470MB /  603MB, 32.7MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  39%|███▊      |  526MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  39%|███▊      |  526MB / 1.36GB, 37.2MB/s  
+New Data Upload               :  87%|████████▋ |  526MB /  603MB, 37.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  40%|███▉      |  537MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  40%|███▉      |  537MB / 1.36GB, 37.8MB/s  
+New Data Upload               :  89%|████████▉ |  537MB /  603MB, 37.8MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  40%|███▉      |  538MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  40%|███▉      |  538MB / 1.36GB, 37.6MB/s  
+New Data Upload               :  80%|████████  |  538MB /  670MB, 37.6MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  45%|████▍     |  608MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  45%|████▍     |  608MB / 1.36GB, 43.1MB/s  
+New Data Upload               :  91%|█████████ |  608MB /  670MB, 43.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  45%|████▌     |  613MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  45%|████▌     |  613MB / 1.36GB, 43.2MB/s  
+New Data Upload               :  83%|████████▎ |  613MB /  737MB, 43.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  46%|████▌     |  625MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  46%|████▌     |  625MB / 1.36GB, 43.8MB/s  
+New Data Upload               :  85%|████████▍ |  625MB /  737MB, 43.8MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  47%|████▋     |  639MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  47%|████▋     |  639MB / 1.36GB, 44.6MB/s  
+New Data Upload               :  87%|████████▋ |  639MB /  737MB, 44.6MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  49%|████▉     |  671MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  49%|████▉     |  671MB / 1.36GB, 46.9MB/s  
+New Data Upload               :  91%|█████████ |  671MB /  737MB, 46.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  49%|████▉     |  671MB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt:  49%|████▉     |  673MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  49%|████▉     |  673MB / 1.36GB, 46.3MB/s  
+New Data Upload               :  84%|████████▎ |  673MB /  805MB, 46.3MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  50%|████▉     |  674MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  50%|████▉     |  674MB / 1.36GB, 46.0MB/s  
+New Data Upload               :  84%|████████▍ |  674MB /  805MB, 46.0MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  50%|████▉     |  677MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  50%|████▉     |  677MB / 1.36GB, 45.9MB/s  
+New Data Upload               :  84%|████████▍ |  677MB /  805MB, 45.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  50%|█████     |  686MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  50%|█████     |  686MB / 1.36GB, 46.2MB/s  
+New Data Upload               :  85%|████████▌ |  686MB /  805MB, 46.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  51%|█████     |  696MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  51%|█████     |  696MB / 1.36GB, 46.6MB/s  
+New Data Upload               :  86%|████████▋ |  696MB /  805MB, 46.6MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  53%|█████▎    |  715MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  53%|█████▎    |  715MB / 1.36GB, 47.8MB/s  
+New Data Upload               :  82%|████████▏ |  715MB /  872MB, 47.8MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  54%|█████▍    |  740MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  54%|█████▍    |  740MB / 1.36GB, 49.5MB/s  
+New Data Upload               :  79%|███████▉  |  740MB /  939MB, 49.5MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  55%|█████▍    |  742MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  55%|█████▍    |  742MB / 1.36GB, 49.2MB/s  
+New Data Upload               :  79%|███████▉  |  742MB /  939MB, 49.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  60%|█████▉    |  812MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  60%|█████▉    |  812MB / 1.36GB, 54.6MB/s  
+New Data Upload               :  81%|████████  |  812MB / 1.01GB, 54.6MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  65%|██████▌   |  887MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  65%|██████▌   |  887MB / 1.36GB, 60.3MB/s  
+New Data Upload               :  88%|████████▊ |  887MB / 1.01GB, 60.3MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  66%|██████▋   |  903MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  66%|██████▋   |  903MB / 1.36GB, 61.2MB/s  
+New Data Upload               :  90%|████████▉ |  903MB / 1.01GB, 61.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  68%|██████▊   |  921MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  68%|██████▊   |  922MB / 1.36GB, 62.2MB/s  
+New Data Upload               :  92%|█████████▏|  922MB / 1.01GB, 62.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  69%|██████▉   |  943MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  69%|██████▉   |  943MB / 1.36GB, 63.4MB/s  
+New Data Upload               :  94%|█████████▍|  943MB / 1.01GB, 63.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  70%|██████▉   |  945MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  70%|██████▉   |  945MB / 1.36GB, 63.1MB/s  
+New Data Upload               :  88%|████████▊ |  945MB / 1.07GB, 63.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  70%|███████   |  953MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  70%|███████   |  953MB / 1.36GB, 63.2MB/s  
+New Data Upload               :  89%|████████▉ |  953MB / 1.07GB, 63.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  71%|███████▏  |  970MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  71%|███████▏  |  970MB / 1.36GB, 64.0MB/s  
+New Data Upload               :  90%|█████████ |  970MB / 1.07GB, 64.0MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  74%|███████▎  |  999MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  74%|███████▎  |  999MB / 1.36GB, 65.9MB/s  
+New Data Upload               :  93%|█████████▎|  999MB / 1.07GB, 65.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  74%|███████▍  | 1.01GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  74%|███████▍  | 1.01GB / 1.36GB, 66.0MB/s  
+New Data Upload               :  88%|████████▊ | 1.01GB / 1.14GB, 66.0MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  74%|███████▍  | 1.01GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  74%|███████▍  | 1.01GB / 1.36GB, 65.6MB/s  
+New Data Upload               :  88%|████████▊ | 1.01GB / 1.14GB, 65.6MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  74%|███████▍  | 1.01GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  74%|███████▍  | 1.01GB / 1.36GB, 65.2MB/s  
+New Data Upload               :  89%|████████▊ | 1.01GB / 1.14GB, 65.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  75%|███████▍  | 1.01GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  75%|███████▍  | 1.01GB / 1.36GB, 64.9MB/s  
+New Data Upload               :  84%|████████▍ | 1.01GB / 1.21GB, 64.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  80%|████████  | 1.09GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  80%|████████  | 1.09GB / 1.36GB, 70.4MB/s  
+New Data Upload               :  90%|█████████ | 1.09GB / 1.21GB, 70.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  82%|████████▏ | 1.12GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  82%|████████▏ | 1.12GB / 1.36GB, 72.1MB/s  
+New Data Upload               :  88%|████████▊ | 1.12GB / 1.27GB, 72.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  87%|████████▋ | 1.19GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  87%|████████▋ | 1.19GB / 1.36GB, 77.4MB/s  
+New Data Upload               :  93%|█████████▎| 1.19GB / 1.27GB, 77.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  89%|████████▉ | 1.21GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  89%|████████▉ | 1.21GB / 1.36GB, 78.4MB/s  
+New Data Upload               :  90%|█████████ | 1.21GB / 1.34GB, 78.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  94%|█████████▍| 1.28GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  94%|█████████▍| 1.28GB / 1.36GB, 83.4MB/s  
+New Data Upload               :  94%|█████████▍| 1.28GB / 1.36GB, 83.4MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  94%|█████████▍| 1.28GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  94%|█████████▍| 1.28GB / 1.36GB, 82.9MB/s  
+New Data Upload               :  94%|█████████▍| 1.28GB / 1.36GB, 82.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  95%|█████████▍| 1.29GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  95%|█████████▍| 1.29GB / 1.36GB, 82.9MB/s  
+New Data Upload               :  95%|█████████▍| 1.29GB / 1.36GB, 82.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  96%|█████████▌| 1.30GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  96%|█████████▌| 1.30GB / 1.36GB, 83.5MB/s  
+New Data Upload               :  96%|█████████▌| 1.30GB / 1.36GB, 83.5MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  97%|█████████▋| 1.32GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  97%|█████████▋| 1.32GB / 1.36GB, 83.9MB/s  
+New Data Upload               :  97%|█████████▋| 1.32GB / 1.36GB, 83.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  99%|█████████▊| 1.34GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  99%|█████████▊| 1.34GB / 1.36GB, 85.1MB/s  
+New Data Upload               :  99%|█████████▊| 1.34GB / 1.36GB, 85.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  99%|█████████▉| 1.34GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  99%|█████████▉| 1.34GB / 1.36GB, 84.6MB/s  
+New Data Upload               :  99%|█████████▉| 1.34GB / 1.36GB, 84.6MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  99%|█████████▉| 1.35GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  99%|█████████▉| 1.35GB / 1.36GB, 84.2MB/s  
+New Data Upload               :  99%|█████████▉| 1.35GB / 1.36GB, 84.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt:  99%|█████████▉| 1.35GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  99%|█████████▉| 1.35GB / 1.36GB, 83.8MB/s  
+New Data Upload               :  99%|█████████▉| 1.35GB / 1.36GB, 83.8MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 83.8MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 83.8MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 80.5MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 80.5MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 79.2MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 79.2MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 76.7MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 76.7MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 76.1MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 76.1MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 74.9MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 74.9MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 73.7MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 73.7MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 1.36GB / 1.36GB, 70.8MB/s  
+New Data Upload               : 100%|██████████| 1.36GB / 1.36GB, 70.8MB/s  [A
+
+  ..._d73728_lr0.0001_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[A
+
+  ..._d73728_lr0.0001_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 1.36GB / 1.36GB, 67.9MB/s  
+New Data Upload               : 100%|██████████| 1.36GB / 1.36GB, 67.9MB/s  
+  ..._d73728_lr0.0001_final.pt: 100%|██████████| 1.36GB / 1.36GB            
+  ↑ pushed sae_full_k32_d73728_lr0.0001_final.pt -> andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+saved /dev/shm/out_rand-lr-low/sae_full_k32_d73728_lr0.0001_final.pt and pushed to HF (andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0)

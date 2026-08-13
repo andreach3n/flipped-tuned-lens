@@ -1,0 +1,30 @@
+[activations] VARIANT=rand_all INIT_SEED=0: randomizing gemma weights
+Loading weights:   0%|          | 0/288 [00:00<?, ?it/s]Loading weights:  70%|██████▉   | 201/288 [00:00<00:00, 1962.71it/s]Loading weights: 100%|██████████| 288/288 [00:00<00:00, 2018.25it/s]
+  re-initialized 288 parameter tensors (seed=0); embeddings included
+Loaded pretrained model google/gemma-2-2b into HookedTransformer
+Moving model to device:  cuda
+  h_13 check: |h| mean 317.00 | var 43.6235 | max|dim var| 64.3964
+[eval_lr_sweep] VARIANT=rand_all INIT_SEED=0 layer=13 N_TOKENS=2,000,000 stream_seed=7
+  ↓ pulled sae_full_k32_d73728_lr0.0001_final.pt <- andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+  loaded 1e-4  d_sae=73728 step=4898 scale=6.5997
+  ↓ pulled sae_full_k32_d73728_100M_t20M.pt <- andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+  loaded 4e-4  d_sae=73728 step=4898 scale=6.5997
+  ↓ pulled sae_full_k32_d73728_lr0.001_final.pt <- andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+  loaded 1e-3  d_sae=73728 step=4898 scale=6.5997
+  8,192/2,000,000 tokens
+  417,792/2,000,000 tokens
+  827,392/2,000,000 tokens
+  1,229,518/2,000,000 tokens
+  1,639,118/2,000,000 tokens
+
+=== LR sweep | rand_all seed 0 | 2,000,308 held-out tokens ===
+    LR  FVU flat  FVU cent     L0    alive  alive%    >=10x
+  1e-4    0.5267    0.5988   32.0    48036   65.2%    45640
+  4e-4    0.5013    0.5699   32.0    73725  100.0%    73412
+  1e-3    0.5553    0.6313   32.0    73250   99.4%    70410
+
+Read: if these rows are within noise of each other, LR is NOT the non-replication's cause
+and no 100M LR run is warranted. Divergence in `alive%` matters more than in FVU.
+
+saved /dev/shm/out_lrsweep/lr_sweep_rand_all_s0.json
+  ↑ pushed lr_sweep_rand_all_s0.json -> andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
