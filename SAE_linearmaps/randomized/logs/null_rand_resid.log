@@ -1,0 +1,59 @@
+[gauss_null] MODE=resid K=32 D_SAE=73728 TRAIN_TOKENS=100,000,000 SUFFIX='_d73728_100M'
+[activations] VARIANT=rand_all INIT_SEED=0: randomizing gemma weights
+Fetching 3 files:   0%|          | 0/3 [00:00<?, ?it/s]/usr/local/lib/python3.11/dist-packages/huggingface_hub/file_download.py:746: UserWarning: Not enough free disk space to download the file. The expected file size is: 4992.58 MB. The target location /root/.cache/huggingface/hub/models--google--gemma-2-2b/blobs only has 2634.92 MB free disk space.
+  warnings.warn(
+Fetching 3 files:  67%|██████▋   | 2/3 [00:11<00:05,  5.51s/it]
+Traceback (most recent call last):
+  File "/workspace/flipped-tuned-lens/SAE_linearmaps/randomized/gauss_null.py", line 67, in <module>
+    model  = load_model(device)
+             ^^^^^^^^^^^^^^^^^^
+  File "/workspace/flipped-tuned-lens/SAE_linearmaps/activations.py", line 84, in load_model
+    hf = AutoModelForCausalLM.from_pretrained(MODEL_NAME, torch_dtype=t.bfloat16)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/transformers/models/auto/auto_factory.py", line 402, in from_pretrained
+    return model_class.from_pretrained(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/transformers/modeling_utils.py", line 4248, in from_pretrained
+    checkpoint_files, sharded_metadata = _get_resolved_checkpoint_files(
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/transformers/modeling_utils.py", line 796, in _get_resolved_checkpoint_files
+    checkpoint_files, sharded_metadata = get_checkpoint_shard_files(
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/transformers/utils/hub.py", line 902, in get_checkpoint_shard_files
+    cached_filenames = cached_files(
+                       ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/transformers/utils/hub.py", line 535, in cached_files
+    raise e
+  File "/usr/local/lib/python3.11/dist-packages/transformers/utils/hub.py", line 453, in cached_files
+    snapshot_download(
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/utils/_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/_snapshot_download.py", line 522, in snapshot_download
+    hf_thread_map(
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/utils/tqdm.py", line 441, in hf_thread_map
+    results[future_to_index[future]] = future.result()
+                                       ^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/concurrent/futures/_base.py", line 449, in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/concurrent/futures/_base.py", line 401, in __get_result
+    raise self._exception
+  File "/usr/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/_snapshot_download.py", line 502, in _inner_hf_hub_download
+    hf_hub_download(  # type: ignore
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/utils/_validators.py", line 88, in _inner_fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/file_download.py", line 1019, in hf_hub_download
+    return _hf_hub_download_to_cache_dir(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/file_download.py", line 1242, in _hf_hub_download_to_cache_dir
+    _download_to_tmp_and_move(
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/file_download.py", line 1960, in _download_to_tmp_and_move
+    xet_get(
+  File "/usr/local/lib/python3.11/dist-packages/huggingface_hub/file_download.py", line 565, in xet_get
+    with session.new_file_download_group(
+RuntimeError: Task error: File reconstruction error: Internal Writer Error: Failed to send data: receiver dropped

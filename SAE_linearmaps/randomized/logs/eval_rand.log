@@ -1,0 +1,31 @@
+[activations] VARIANT=rand_all INIT_SEED=0: randomizing gemma weights
+Loading weights:   0%|          | 0/288 [00:00<?, ?it/s]Loading weights:   0%|          | 1/288 [00:00<01:53,  2.53it/s]Loading weights:  20%|█▉        | 57/288 [00:00<00:01, 150.39it/s]Loading weights:  32%|███▏      | 91/288 [00:00<00:01, 161.48it/s]Loading weights:  41%|████      | 118/288 [00:00<00:00, 185.94it/s]Loading weights:  50%|█████     | 145/288 [00:00<00:00, 206.37it/s]Loading weights:  60%|█████▉    | 172/288 [00:01<00:00, 218.66it/s]Loading weights:  69%|██████▉   | 198/288 [00:01<00:00, 227.70it/s]Loading weights:  78%|███████▊  | 224/288 [00:01<00:00, 156.63it/s]Loading weights:  85%|████████▌ | 245/288 [00:01<00:00, 166.39it/s]Loading weights:  92%|█████████▏| 266/288 [00:01<00:00, 174.33it/s]Loading weights: 100%|██████████| 288/288 [00:01<00:00, 169.71it/s]
+  re-initialized 288 parameter tensors (seed=0); embeddings included
+Loaded pretrained model google/gemma-2-2b into HookedTransformer
+Moving model to device:  cuda
+  h_13 check: |h| mean 317.00 | var 43.6235 | max|dim var| 64.3964
+[eval_fvu] VARIANT=rand_all INIT_SEED=0 layer=13 K=32 SUFFIX='_d73728_100M' CKPT=final N_TOKENS=2,000,000 stream_seed=7
+  ↓ pulled sae_full_k32_d73728_100M_final.pt <- andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+  sae_full_k32_d73728_100M_final.pt: d_sae=73728 k=32 step=24493 tokens=final
+  ↓ pulled sae_resid_k32_d73728_100M_final.pt <- andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+  sae_resid_k32_d73728_100M_final.pt: d_sae=73728 k=32 step=24493 tokens=final
+  ↓ pulled linear_map_layer_13.pt <- andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+  [skip] sae_hybrid_k32_d73728_100M_final.pt not in this arm's repo (RemoteEntryNotFoundError)
+  [skip] sae_outbias_k32_d73728_100M_final.pt not in this arm's repo (RemoteEntryNotFoundError)
+  8,192/2,000,000 tokens
+  417,792/2,000,000 tokens
+  827,392/2,000,000 tokens
+  1,229,518/2,000,000 tokens
+  1,639,118/2,000,000 tokens
+
+=== rand_all (seed 0), 2,000,308 tokens ===
+                                      flat   centred
+Var(r)/Var(h)                       0.6809    0.7740
+FVU on h  - full SAE                0.4725    0.5372
+FVU on h  - map + resid SAE         0.4706    0.5350
+FVU on r  - resid SAE alone         0.6912    0.6912
+identity check: 0.470604 == 0.470604 (composite)
+
+saved /dev/shm/out_eval/fvu_rand_all_s0_k32_d73728_100M.json
+  ↑ pushed fvu_rand_all_s0_k32_d73728_100M.json -> andreayhchen/gemma2-2b-linearmap-saes-rand-all-s0
+peak GPU memory: 21.7 GiB

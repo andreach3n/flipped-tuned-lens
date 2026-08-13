@@ -1,0 +1,249 @@
+[gauss_null] MODE=full K=32 D_SAE=73728 TRAIN_TOKENS=100,000,000 SUFFIX='_d73728_100M'
+Loading weights:   0%|          | 0/288 [00:00<?, ?it/s]Loading weights:   0%|          | 1/288 [00:00<02:00,  2.38it/s]Loading weights:  19%|█▉        | 55/288 [00:00<00:01, 138.05it/s]Loading weights:  30%|███       | 87/288 [00:00<00:01, 155.94it/s]Loading weights:  39%|███▉      | 113/288 [00:00<00:00, 178.26it/s]Loading weights:  48%|████▊     | 139/288 [00:00<00:00, 198.40it/s]Loading weights:  57%|█████▋    | 165/288 [00:01<00:00, 213.76it/s]Loading weights:  66%|██████▋   | 191/288 [00:01<00:00, 179.01it/s]Loading weights:  80%|███████▉  | 229/288 [00:01<00:00, 226.18it/s]Loading weights:  89%|████████▉ | 256/288 [00:01<00:00, 231.78it/s]Loading weights:  98%|█████████▊| 283/288 [00:01<00:00, 198.31it/s]Loading weights: 100%|██████████| 288/288 [00:01<00:00, 180.36it/s]
+Loaded pretrained model google/gemma-2-2b into HookedTransformer
+Moving model to device:  cuda
+[gauss_null] VARIANT=trained INIT_SEED=0 MODE=full K=32 cov=5,000,000 train=100,000,000
+  covariance: 8,192/5,000,000 tokens
+  covariance: 827,392/5,000,000 tokens
+  covariance: 1,639,476/5,000,000 tokens
+  covariance: 2,451,120/5,000,000 tokens
+  covariance: 3,262,796/5,000,000 tokens
+  covariance: 4,074,590/5,000,000 tokens
+  covariance: 4,893,790/5,000,000 tokens
+  Sigma fitted on 5,000,286 tokens | mean per-dim var 8.0018 | ||mu|| 113.270
+  scale 3.6628
+step      0/24414 | loss 2327.422 | FVU 0.997 | L0 32.0 | dead 0
+step    500/24414 | loss 1148.515 | FVU 0.379 | L0 32.0 | dead 71486
+step   1000/24414 | loss 1105.262 | FVU 0.353 | L0 32.0 | dead 68195
+step   1500/24414 | loss 1107.942 | FVU 0.344 | L0 32.0 | dead 63372
+step   2000/24414 | loss 1136.856 | FVU 0.340 | L0 32.0 | dead 56207
+step   2500/24414 | loss 1162.774 | FVU 0.339 | L0 32.0 | dead 44334
+step   3000/24414 | loss 1169.394 | FVU 0.338 | L0 32.0 | dead 30054
+step   3500/24414 | loss 1332.900 | FVU 0.341 | L0 32.0 | dead 4336
+step   4000/24414 | loss 840.947 | FVU 0.335 | L0 32.0 | dead 93
+step   4500/24414 | loss 814.833 | FVU 0.333 | L0 32.0 | dead 56
+step   5000/24414 | loss 793.821 | FVU 0.332 | L0 32.0 | dead 25
+step   5500/24414 | loss 786.959 | FVU 0.333 | L0 32.0 | dead 15
+step   6000/24414 | loss 789.126 | FVU 0.331 | L0 32.0 | dead 19
+step   6500/24414 | loss 811.663 | FVU 0.336 | L0 32.0 | dead 48
+step   7000/24414 | loss 815.579 | FVU 0.334 | L0 32.0 | dead 53
+step   7500/24414 | loss 829.437 | FVU 0.336 | L0 32.0 | dead 73
+step   8000/24414 | loss 831.289 | FVU 0.334 | L0 32.0 | dead 77
+step   8500/24414 | loss 858.553 | FVU 0.336 | L0 32.0 | dead 115
+step   9000/24414 | loss 860.401 | FVU 0.335 | L0 32.0 | dead 120
+step   9500/24414 | loss 887.612 | FVU 0.337 | L0 32.0 | dead 159
+step  10000/24414 | loss 880.539 | FVU 0.333 | L0 32.0 | dead 143
+step  10500/24414 | loss 844.459 | FVU 0.335 | L0 32.0 | dead 95
+step  11000/24414 | loss 855.073 | FVU 0.334 | L0 32.0 | dead 107
+step  11500/24414 | loss 840.215 | FVU 0.336 | L0 32.0 | dead 86
+step  12000/24414 | loss 849.146 | FVU 0.334 | L0 32.0 | dead 98
+step  12500/24414 | loss 839.196 | FVU 0.334 | L0 32.0 | dead 83
+step  13000/24414 | loss 842.545 | FVU 0.336 | L0 32.0 | dead 87
+step  13500/24414 | loss 847.338 | FVU 0.336 | L0 32.0 | dead 92
+step  14000/24414 | loss 851.336 | FVU 0.333 | L0 32.0 | dead 98
+step  14500/24414 | loss 849.315 | FVU 0.335 | L0 32.0 | dead 90
+step  15000/24414 | loss 830.033 | FVU 0.337 | L0 32.0 | dead 68
+step  15500/24414 | loss 842.974 | FVU 0.336 | L0 32.0 | dead 86
+step  16000/24414 | loss 848.568 | FVU 0.338 | L0 32.0 | dead 89
+step  16500/24414 | loss 843.225 | FVU 0.337 | L0 32.0 | dead 84
+step  17000/24414 | loss 850.058 | FVU 0.337 | L0 32.0 | dead 93
+step  17500/24414 | loss 855.333 | FVU 0.336 | L0 32.0 | dead 97
+step  18000/24414 | loss 914.959 | FVU 0.340 | L0 32.0 | dead 164
+step  18500/24414 | loss 1598.432 | FVU 0.376 | L0 32.0 | dead 814
+step  19000/24414 | loss 835.005 | FVU 0.337 | L0 32.0 | dead 69
+step  19500/24414 | loss 966.083 | FVU 0.347 | L0 32.0 | dead 224
+step  20000/24414 | loss 900.100 | FVU 0.339 | L0 32.0 | dead 158
+step  20500/24414 | loss 928.955 | FVU 0.339 | L0 32.0 | dead 200
+step  21000/24414 | loss 901.661 | FVU 0.336 | L0 32.0 | dead 170
+step  21500/24414 | loss 889.404 | FVU 0.335 | L0 32.0 | dead 145
+step  22000/24414 | loss 814.481 | FVU 0.336 | L0 32.0 | dead 41
+step  22500/24414 | loss 817.903 | FVU 0.337 | L0 32.0 | dead 45
+step  23000/24414 | loss 1235.010 | FVU 0.350 | L0 32.0 | dead 606
+step  23500/24414 | loss 812.586 | FVU 0.334 | L0 32.0 | dead 43
+step  24000/24414 | loss 827.429 | FVU 0.334 | L0 32.0 | dead 63
+
+=== GAUSSIAN NULL | trained (seed 0) | target=full | 1,998,848 eval tokens ===
+  null FVU   flat 0.3363   centred 0.5703
+  compare against eval_fvu.py's fvu_h_full for this arm:
+    real << null -> genuine non-Gaussian structure;  real ~= null -> covariance only
+saved /dev/shm/out_null/gauss_null_trained_s0_full_k32_d73728_100M.json
+  ↑ pushed gauss_null_trained_s0_full_k32_d73728_100M.json -> andreayhchen/gemma2-2b-linearmap-saes-trained-20m
+Processing Files (0 / 0)      : |          |  0.00B /  0.00B            
+New Data Upload               : |          |  0.00B /  0.00B            [A
+
+  ..._k32_d73728_100M_final.pt:   4%|▍         | 52.9MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:   4%|▍         | 52.9MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   4%|▍         | 52.9MB / 1.36GB, 5.22MB/s  
+New Data Upload               :  79%|███████▉  | 52.9MB / 67.0MB, 5.22MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:   5%|▍         | 67.0MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   5%|▍         | 67.0MB / 1.36GB, 6.56MB/s  
+New Data Upload               :  50%|█████     | 67.0MB /  134MB, 6.56MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:   5%|▌         | 74.7MB / 1.36GB            [A[AProcessing Files (0 / 1)      :   5%|▌         | 74.7MB / 1.36GB, 7.26MB/s  
+New Data Upload               :  56%|█████▌    | 74.7MB /  134MB, 7.26MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  10%|▉         |  134MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  10%|▉         |  134MB / 1.36GB, 13.0MB/s  
+New Data Upload               :  67%|██████▋   |  134MB /  201MB, 13.0MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  10%|▉         |  134MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  11%|█         |  143MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  11%|█         |  143MB / 1.36GB, 13.1MB/s  
+New Data Upload               :  71%|███████▏  |  143MB /  201MB, 13.1MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  15%|█▍        |  201MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  15%|█▍        |  201MB / 1.36GB, 18.6MB/s  
+New Data Upload               :  75%|███████▍  |  201MB /  268MB, 18.6MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  15%|█▍        |  201MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  20%|█▉        |  268MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  20%|█▉        |  268MB / 1.36GB, 24.6MB/s  
+New Data Upload               :  80%|███████▉  |  268MB /  335MB, 24.6MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  20%|█▉        |  268MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  20%|██        |  275MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  20%|██        |  275MB / 1.36GB, 24.7MB/s  
+New Data Upload               :  82%|████████▏ |  275MB /  335MB, 24.7MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  25%|██▍       |  335MB / 1.36GB, 30.2MB/s  
+New Data Upload               :  83%|████████▎ |  335MB /  402MB, 30.2MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  25%|██▍       |  335MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  30%|██▉       |  402MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  30%|██▉       |  402MB / 1.36GB, 35.1MB/s  
+New Data Upload               : 100%|█████████▉|  402MB /  402MB, 35.1MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  30%|██▉       |  402MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  30%|██▉       |  403MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  30%|██▉       |  403MB / 1.36GB, 34.5MB/s  
+New Data Upload               :  86%|████████▌ |  403MB /  469MB, 34.5MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  35%|███▍      |  469MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  35%|███▍      |  469MB / 1.36GB, 40.4MB/s  
+New Data Upload               : 100%|█████████▉|  469MB /  469MB, 40.4MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  35%|███▍      |  469MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  35%|███▍      |  469MB / 1.36GB, 40.0MB/s  
+New Data Upload               :  87%|████████▋ |  469MB /  536MB, 40.0MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  39%|███▉      |  536MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  39%|███▉      |  536MB / 1.36GB, 45.8MB/s  
+New Data Upload               : 100%|█████████▉|  536MB /  536MB, 45.8MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  39%|███▉      |  536MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  40%|████      |  545MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  40%|████      |  545MB / 1.36GB, 45.7MB/s  
+New Data Upload               :  90%|█████████ |  545MB /  603MB, 45.7MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  44%|████▍     |  603MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  44%|████▍     |  603MB / 1.36GB, 50.7MB/s  
+New Data Upload               : 100%|█████████▉|  603MB /  603MB, 50.7MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  44%|████▍     |  603MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  49%|████▉     |  671MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  49%|████▉     |  671MB / 1.36GB, 55.9MB/s  
+New Data Upload               : 100%|█████████▉|  671MB /  671MB, 55.9MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  49%|████▉     |  671MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  49%|████▉     |  671MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  49%|████▉     |  671MB / 1.36GB, 54.9MB/s  
+New Data Upload               :  91%|█████████ |  671MB /  738MB, 54.9MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  54%|█████▍    |  738MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  54%|█████▍    |  738MB / 1.36GB, 60.4MB/s  
+New Data Upload               :  92%|█████████▏|  738MB /  805MB, 60.4MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  54%|█████▍    |  738MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  56%|█████▌    |  755MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  56%|█████▌    |  755MB / 1.36GB, 60.9MB/s  
+New Data Upload               :  94%|█████████▍|  755MB /  805MB, 60.9MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  59%|█████▉    |  805MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  59%|█████▉    |  805MB / 1.36GB, 64.8MB/s  
+New Data Upload               :  92%|█████████▏|  805MB /  872MB, 64.8MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  61%|██████    |  829MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  61%|██████    |  829MB / 1.36GB, 66.5MB/s  
+New Data Upload               :  95%|█████████▌|  829MB /  872MB, 66.5MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  64%|██████▍   |  872MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  64%|██████▍   |  872MB / 1.36GB, 69.7MB/s  
+New Data Upload               :  93%|█████████▎|  872MB /  939MB, 69.7MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  64%|██████▍   |  872MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  69%|██████▉   |  939MB / 1.36GB            [A[AProcessing Files (0 / 1)      :  69%|██████▉   |  939MB / 1.36GB, 74.4MB/s  
+New Data Upload               :  93%|█████████▎|  939MB / 1.01GB, 74.4MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  69%|██████▉   |  939MB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  74%|███████▍  | 1.01GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  74%|███████▍  | 1.01GB / 1.36GB, 79.1MB/s  
+New Data Upload               : 100%|█████████▉| 1.01GB / 1.01GB, 79.1MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  74%|███████▍  | 1.01GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  74%|███████▍  | 1.01GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  79%|███████▉  | 1.07GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  79%|███████▉  | 1.07GB / 1.36GB, 82.9MB/s  
+New Data Upload               :  94%|█████████▍| 1.07GB / 1.14GB, 82.9MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  79%|███████▉  | 1.07GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  79%|███████▉  | 1.07GB / 1.36GB, 82.2MB/s  
+New Data Upload               :  94%|█████████▍| 1.07GB / 1.14GB, 82.2MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  83%|████████▎ | 1.13GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  83%|████████▎ | 1.13GB / 1.36GB, 86.3MB/s  
+New Data Upload               :  99%|█████████▉| 1.13GB / 1.14GB, 86.3MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  84%|████████▍ | 1.14GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  84%|████████▍ | 1.14GB / 1.36GB, 86.6MB/s  
+New Data Upload               :  94%|█████████▍| 1.14GB / 1.21GB, 86.6MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  85%|████████▌ | 1.16GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  85%|████████▌ | 1.16GB / 1.36GB, 87.6MB/s  
+New Data Upload               :  96%|█████████▌| 1.16GB / 1.21GB, 87.6MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  89%|████████▉ | 1.21GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  89%|████████▉ | 1.21GB / 1.36GB, 90.9MB/s  
+New Data Upload               :  95%|█████████▍| 1.21GB / 1.27GB, 90.9MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  89%|████████▉ | 1.21GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt:  94%|█████████▎| 1.27GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  94%|█████████▎| 1.27GB / 1.36GB, 95.1MB/s  
+New Data Upload               :  95%|█████████▌| 1.27GB / 1.34GB, 95.1MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  94%|█████████▎| 1.27GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  94%|█████████▎| 1.27GB / 1.36GB, 94.3MB/s  
+New Data Upload               :  95%|█████████▌| 1.27GB / 1.34GB, 94.3MB/s  [A
+
+  ..._k32_d73728_100M_final.pt:  99%|█████████▊| 1.34GB / 1.36GB            [A[AProcessing Files (0 / 1)      :  99%|█████████▊| 1.34GB / 1.36GB, 99.3MB/s  
+New Data Upload               :  99%|█████████▊| 1.34GB / 1.36GB, 99.3MB/s  [A
+
+  ..._k32_d73728_100M_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB,  100MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB,  100MB/s  [A
+
+  ..._k32_d73728_100M_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 97.4MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 97.4MB/s  [A
+
+  ..._k32_d73728_100M_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[AProcessing Files (0 / 1)      : 100%|█████████▉| 1.36GB / 1.36GB, 95.7MB/s  
+New Data Upload               : 100%|█████████▉| 1.36GB / 1.36GB, 95.7MB/s  [A
+
+  ..._k32_d73728_100M_final.pt: 100%|█████████▉| 1.36GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 1.36GB / 1.36GB, 94.1MB/s  
+New Data Upload               : 100%|██████████| 1.36GB / 1.36GB, 94.1MB/s  [A
+
+  ..._k32_d73728_100M_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[A
+
+  ..._k32_d73728_100M_final.pt: 100%|██████████| 1.36GB / 1.36GB            [A[AProcessing Files (1 / 1)      : 100%|██████████| 1.36GB / 1.36GB, 91.2MB/s  
+New Data Upload               : 100%|██████████| 1.36GB / 1.36GB, 91.2MB/s  
+  ..._k32_d73728_100M_final.pt: 100%|██████████| 1.36GB / 1.36GB            
+  ↑ pushed sae_gauss_full_k32_d73728_100M_final.pt -> andreayhchen/gemma2-2b-linearmap-saes-trained-20m

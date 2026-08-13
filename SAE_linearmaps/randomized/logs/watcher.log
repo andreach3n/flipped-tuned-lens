@@ -1,0 +1,50 @@
+nohup: ignoring input
+[watcher] started 2026-08-12T05:59:14Z; polling every 300s for 'gauss_null.py'
+[watcher] pod=57j3nbh6ue8g1l
+[watcher] 2026-08-12T05:59:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:04:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:09:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:14:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:19:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:24:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:29:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:34:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:39:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:44:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:49:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:54:14Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T06:59:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:04:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:09:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:14:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:19:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:24:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:29:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:34:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:39:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:44:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:49:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:54:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T07:59:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:04:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:09:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:14:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:19:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:24:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:29:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:34:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:39:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:44:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:49:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:54:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T08:59:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T09:04:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T09:09:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T09:14:15Z  1 process(es) matching 'gauss_null.py' still alive
+[watcher] 2026-08-12T09:19:15Z  fleet drained
+[watcher] _final.pt artifacts on disk: 4
+  /dev/shm/out_null_rand/rand_all_s0_sae_gauss_resid_k32_d73728_100M_final.pt
+  /dev/shm/out_null_rand/rand_all_s0_sae_gauss_full_k32_d73728_100M_final.pt
+  /dev/shm/out_null/trained_s0_sae_gauss_resid_k32_d73728_100M_final.pt
+  /dev/shm/out_null/sae_gauss_full_k32_d73728_100M_final.pt
+  [FAILED] /workspace/logs/null_rand_resid.log

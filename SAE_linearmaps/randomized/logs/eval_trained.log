@@ -1,0 +1,28 @@
+Loading weights:   0%|          | 0/288 [00:00<?, ?it/s]Loading weights:   0%|          | 1/288 [00:00<01:28,  3.23it/s]Loading weights:  22%|██▏       | 64/288 [00:00<00:01, 200.92it/s]Loading weights:  35%|███▌      | 101/288 [00:00<00:00, 199.81it/s]Loading weights:  45%|████▌     | 131/288 [00:00<00:00, 223.84it/s]Loading weights:  56%|█████▌    | 161/288 [00:00<00:00, 239.39it/s]Loading weights:  66%|██████▌   | 190/288 [00:00<00:00, 246.65it/s]Loading weights:  76%|███████▌  | 218/288 [00:01<00:00, 210.19it/s]Loading weights:  84%|████████▍ | 242/288 [00:01<00:00, 216.63it/s]Loading weights:  92%|█████████▏| 266/288 [00:01<00:00, 221.15it/s]Loading weights: 100%|██████████| 288/288 [00:01<00:00, 205.67it/s]
+Loaded pretrained model google/gemma-2-2b into HookedTransformer
+Moving model to device:  cuda
+[eval_fvu] VARIANT=trained INIT_SEED=0 layer=13 K=32 SUFFIX='_d73728_100M' CKPT=final N_TOKENS=2,000,000 stream_seed=7
+  ↓ pulled sae_full_k32_d73728_100M_final.pt <- andreayhchen/gemma2-2b-linearmap-saes-trained-20m
+  sae_full_k32_d73728_100M_final.pt: d_sae=73728 k=32 step=24493 tokens=final
+  ↓ pulled sae_resid_k32_d73728_100M_final.pt <- andreayhchen/gemma2-2b-linearmap-saes-trained-20m
+  sae_resid_k32_d73728_100M_final.pt: d_sae=73728 k=32 step=24493 tokens=final
+  ↓ pulled linear_map_layer_13.pt <- andreayhchen/gemma2-2b-linearmap-saes-trained-20m
+  [skip] sae_hybrid_k32_d73728_100M_final.pt not in this arm's repo (RemoteEntryNotFoundError)
+  [skip] sae_outbias_k32_d73728_100M_final.pt not in this arm's repo (RemoteEntryNotFoundError)
+  8,192/2,000,000 tokens
+  417,792/2,000,000 tokens
+  827,392/2,000,000 tokens
+  1,229,518/2,000,000 tokens
+  1,639,118/2,000,000 tokens
+
+=== trained (seed 0), 2,000,308 tokens ===
+                                      flat   centred
+Var(r)/Var(h)                       0.4411    0.7477
+FVU on h  - full SAE                0.1571    0.2663
+FVU on h  - map + resid SAE         0.1585    0.2686
+FVU on r  - resid SAE alone         0.3593    0.3593
+identity check: 0.158479 == 0.158479 (composite)
+
+saved /dev/shm/out_eval/fvu_trained_s0_k32_d73728_100M.json
+  ↑ pushed fvu_trained_s0_k32_d73728_100M.json -> andreayhchen/gemma2-2b-linearmap-saes-trained-20m
+peak GPU memory: 21.7 GiB
