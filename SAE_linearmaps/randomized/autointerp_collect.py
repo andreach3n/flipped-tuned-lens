@@ -33,7 +33,7 @@ import sys
 # this experiment lives in SAE_linearmaps/randomized/ -- the shared modules
 # (activations, hf_io, sae_lens loaders) live one level up
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from activations import load_model, activation_stream, _docs, _forward, D_IN, VARIANT, INIT_SEED
+from activations import load_model, activation_stream, _docs, _forward, D_IN, VARIANT, INIT_SEED, MAP_FILE
 from hf_io import push, pull
 from autointerp_common import (CELLS, cell_name, stratified_sample, print_plan,
                                render_marked, render_anchor, plant_wrong_marks,
@@ -86,7 +86,7 @@ def load_arm_saes(model):
     import torch.nn as nn
     saes = {m: load_sae(f"sae_{m}_k{K_SAE}{SUFFIX}_final.pt") for m in MODES}
     lm = nn.Linear(D_IN, D_IN).to(device)
-    lm.load_state_dict(t.load(pull("linear_map_layer_13.pt"), weights_only=False))
+    lm.load_state_dict(t.load(pull(MAP_FILE), weights_only=False))
     lm.eval()
     with t.no_grad():
         P = lm(model.embed(t.arange(model.cfg.d_vocab, device=device)).float())

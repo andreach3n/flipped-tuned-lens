@@ -33,7 +33,7 @@ import sys
 # this experiment lives in SAE_linearmaps/randomized/ -- the shared modules
 # (activations, hf_io, sae_lens loaders) live one level up
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from activations import load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED
+from activations import load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED, MAP_FILE
 from hf_io import push, pull
 
 N_TOKENS  = int(os.environ.get("N_TOKENS", 20_000_000))
@@ -113,7 +113,7 @@ VOCAB_CHUNK = int(os.environ.get("VOCAB_CHUNK", 8192))
 try:
     import torch.nn as nn
     lm = nn.Linear(D_IN, D_IN).to(device)
-    lm.load_state_dict(t.load(pull("linear_map_layer_13.pt"), weights_only=False))
+    lm.load_state_dict(t.load(pull(MAP_FILE), weights_only=False))
     lm.eval()
     with t.no_grad():
         # SSE = sum_i ||h_i - P[tok_i]||^2, expanded so it needs only the accumulators:

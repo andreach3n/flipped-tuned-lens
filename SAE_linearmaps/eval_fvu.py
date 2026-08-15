@@ -47,7 +47,7 @@ import torch as t
 import torch.nn as nn
 from sae_lens import BatchTopKTrainingSAE
 
-from activations import load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED
+from activations import (load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED, MAP_FILE)
 from hf_io import push, pull
 
 K_SAE    = int(os.environ.get("K", 64))
@@ -93,7 +93,7 @@ sae_resid, scale_resid, _ = load_sae(f"sae_resid_k{K_SAE}{SUFFIX}_{CKPT}.pt")
 # The frozen greedy map, rebuilt into a (V, 2304) lookup exactly as train_sae_res.py does.
 # P.pt is NOT read from disk -- it is pure scratch there and gets deleted between runs.
 linear_map = nn.Linear(D_IN, D_IN).to(device)
-linear_map.load_state_dict(t.load(pull("linear_map_layer_13.pt"), weights_only=False))
+linear_map.load_state_dict(t.load(pull(MAP_FILE), weights_only=False))
 linear_map.eval()
 with t.no_grad():
     embed_table = model.embed(t.arange(V, device=device)).float()

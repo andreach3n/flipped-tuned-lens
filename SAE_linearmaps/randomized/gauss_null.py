@@ -36,7 +36,7 @@ import sys
 # this experiment lives in SAE_linearmaps/randomized/ -- the shared modules
 # (activations, hf_io, sae_lens loaders) live one level up
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from activations import load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED
+from activations import (load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED, MAP_FILE)
 from hf_io import push, pull
 
 MODE         = os.environ.get("MODE", "resid")                        # "full" | "resid"
@@ -58,6 +58,7 @@ os.makedirs(OUT_DIR, exist_ok=True)
 # k=32/d73728 null would overwrite the k=64/16k null it is NOT comparable to. Historical defaults
 # reproduce the historical names.
 SUFFIX = ""
+if LAYER != 13:                 SUFFIX += f"_L{LAYER}"
 if D_SAE != 16384:             SUFFIX += f"_d{D_SAE}"
 if LR != 4e-4:                 SUFFIX += f"_lr{LR:g}"
 if TRAIN_TOKENS != 20_000_000: SUFFIX += f"_{TRAIN_TOKENS // 1_000_000}M"
@@ -73,7 +74,7 @@ print(f"[gauss_null] VARIANT={VARIANT} INIT_SEED={INIT_SEED} MODE={MODE} K={K} "
 P = None
 if MODE == "resid":
     lm = nn.Linear(D_IN, D_IN).to(device)
-    lm.load_state_dict(t.load(pull("linear_map_layer_13.pt"), weights_only=False))
+    lm.load_state_dict(t.load(pull(MAP_FILE), weights_only=False))
     lm.eval()
     with t.no_grad():
         embed_table = model.embed(t.arange(V, device=device)).float()

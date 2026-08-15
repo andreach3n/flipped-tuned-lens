@@ -15,7 +15,8 @@ Run this ONCE; every SAE run then just pulls the result from HF.
 import os
 import torch as t
 import torch.nn as nn
-from activations import load_model, activation_stream, take_sample, D_IN, VARIANT, INIT_SEED
+from activations import (load_model, activation_stream, take_sample, D_IN, VARIANT,
+                         INIT_SEED, LAYER, MAP_FILE)
 from hf_io import push
 
 MAP_TOKENS = int(os.environ.get("MAP_TOKENS", 20_000_000))   # plenty to fit a 2304x2304 map
@@ -80,7 +81,7 @@ with t.no_grad():
 print(f"linear map R^2 on held-out sample: {r2.item():.4f}   (expect ~0.66 trained / ~0.30 random)")
 print(f"  VARIANT={VARIANT} INIT_SEED={INIT_SEED}")
 
-path = f"{OUT_DIR}/linear_map_layer_13.pt"
+path = f"{OUT_DIR}/{MAP_FILE}"
 t.save(linear_map.cpu().state_dict(), path)
-push(path, "linear_map_layer_13.pt")
+push(path, MAP_FILE)
 print(f"saved {path} and pushed to HF")

@@ -4,11 +4,11 @@ import torch as t
 import torch.nn as nn
 import os
 
-from activations import load_model, activation_stream, take_sample   # on-the-fly gemma activations
+from activations import (load_model, activation_stream, take_sample,   # on-the-fly gemma activations
+                         LAYER, MAP_FILE)   # LAYER is env-driven there; do NOT redefine it here
 from hf_io import push, pull                                         # artifacts live on HF, not a volume
 
 MODEL_NAME = "google/gemma-2-2b"
-LAYER=13
 D_IN=2304
 D_SAE = int(os.environ.get("D_SAE", 16384))   # replication runs: D_SAE=73728 (expansion factor 32)
 K     = int(os.environ.get("K", 64))          # sweep: K=32 MODE=full python train_sae_res.py
@@ -28,11 +28,12 @@ os.makedirs(OUT_DIR, exist_ok=True)
 # would otherwise overwrite the old 16k-dict sae_full_k32_final.pt. Historical defaults
 # produce the historical names unchanged. Eval scripts point at a tagged run via SUFFIX.
 SUFFIX = ""
+if LAYER != 13:                 SUFFIX += f"_L{LAYER}"   # depth sweep; 13 keeps historical names
 if D_SAE != 16384:              SUFFIX += f"_d{D_SAE}"
 if LR != 4e-4:                  SUFFIX += f"_lr{LR:g}"
 if TRAIN_TOKENS != 20_000_000:  SUFFIX += f"_{TRAIN_TOKENS // 1_000_000}M"
 BASE = f"sae_{MODE}_k{K}{SUFFIX}"
-print(f"[train] artifact base name: {BASE}")
+print(f"[train] layer={LAYER} mode={MODE} artifact base name: {BASE}")
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 model = load_model(device)                 # kept resident: activations are generated live during training
@@ -47,7 +48,7 @@ t.manual_seed(SEED)                        # deterministic SAE init (reproducibl
 sae = BatchTopKTrainingSAE(cfg).to(device)
 
 linear_map = nn.Linear(2304, 2304).to(device)
-map_path = pull("linear_map_layer_13.pt")      # pulled from HF (run fit_map.py once to create it)
+map_path = pull(MAP_FILE)      # pulled from HF (run fit_map.py once to create it)
 linear_map.load_state_dict(t.load(map_path, weights_only=False))
 linear_map.eval()
 

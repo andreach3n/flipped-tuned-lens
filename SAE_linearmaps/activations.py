@@ -29,10 +29,15 @@ from transformer_lens import HookedTransformer
 from datasets import load_dataset
 
 MODEL_NAME = "google/gemma-2-2b"
-LAYER   = 13
-HOOK    = f"blocks.{LAYER}.hook_resid_post"
-SEQ_LEN = 512
-D_IN    = 2304
+# LAYER is env-driven for the depth sweep (gemma-2-2b has 26 blocks, 0..25). Everything derived
+# from it lives HERE so no script can disagree about which layer it is on -- including MAP_FILE,
+# because the linear map is layer-specific and a stale one is silently wrong, not an error.
+# The default 13 reproduces every historical artifact name byte-for-byte.
+LAYER    = int(os.environ.get("LAYER", 13))
+HOOK     = f"blocks.{LAYER}.hook_resid_post"
+MAP_FILE = f"linear_map_layer_{LAYER}.pt"
+SEQ_LEN  = 512
+D_IN     = 2304
 
 VARIANT   = os.environ.get("VARIANT", "trained").strip() or "trained"   # trained | rand_all | rand_nonembed
 INIT_SEED = int(os.environ.get("INIT_SEED", 0))
