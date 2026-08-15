@@ -150,6 +150,22 @@ def mean(xs):
     return sum(xs) / len(xs) if xs else None
 
 
+def sem(xs):
+    """Standard error of a cell's mean AUROC. None if fewer than 2 values.
+
+    AUROC is computed PER LATENT (one scoring call each) and the cell figure is the mean over
+    latents, so latent-to-latent spread IS the sampling distribution of that mean -- sd/sqrt(n)
+    is the correct error bar. Do NOT use the per-example count: the examples within one latent
+    are not independent draws for this purpose.
+    """
+    xs = [x for x in xs if x is not None]
+    n = len(xs)
+    if n < 2:
+        return None
+    m = sum(xs) / n
+    return math.sqrt(sum((x - m) ** 2 for x in xs) / (n - 1) / n)
+
+
 # ---------------------------------------------------------------- prompts
 # Adapted from the delphi (EleutherAI) explainer/scorer prompts; simplified wording,
 # same task structure. Cite as "following Paulo et al. (2024)".

@@ -14,6 +14,7 @@ analyze also joins the rubric ratings (RUBRIC_RATINGS + autointerp_key.json, if 
 for the per-latent "high AUROC, zero abstractness" scatter. Runs on the Mac (.env key).
 """
 import json
+import math
 import os
 import sys
 import time
@@ -30,7 +31,7 @@ try:
 except ImportError:
     pass
 
-from autointerp_common import (CELLS, cell_name, DETECT_SYSTEM, FUZZ_SYSTEM,
+from autointerp_common import (CELLS, cell_name, DETECT_SYSTEM, FUZZ_SYSTEM, sem,
                                numbered_block, ratings_schema, auroc, mean)
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -192,12 +193,25 @@ def analyze():
         if cell in by_cell and s["auroc"] is not None:
             by_cell[cell][task].append(s["auroc"])
 
-    print(f"{'cell':>16} | {'fuzz AUROC':>10} | {'detect AUROC':>12} | n")
+    print(f"{'cell':>16} | {'fuzz AUROC':>16} | {'detect AUROC':>16} | n")
     for c in CELLS:
         cell = cell_name(*c)
         fz, dt = mean(by_cell[cell]["fuzz"]), mean(by_cell[cell]["detect"])
-        print(f"{cell:>16} | {fz if fz is None else round(fz,3)!s:>10} | "
-              f"{dt if dt is None else round(dt,3)!s:>12} | {len(by_cell[cell]['fuzz'])}")
+        fe, de = sem(by_cell[cell]["fuzz"]), sem(by_cell[cell]["detect"])
+        f_s = "-" if fz is None else f"{fz:.3f} +/- {fe:.3f}"
+        d_s = "-" if dt is None else f"{dt:.3f} +/- {de:.3f}"
+        print(f"{cell:>16} | {f_s:>16} | {d_s:>16} | {len(by_cell[cell]['fuzz'])}")
+    # The comparison the experiment exists to make: trained - random, per mode, with the SE of
+    # the DIFFERENCE (independent cells, so the SEs add in quadrature).
+    print()
+    for task in ("fuzz", "detect"):
+        for mode in ("full", "resid"):
+            tm, rm = mean(by_cell[f"trained/{mode}"][task]), mean(by_cell[f"rand_all/{mode}"][task])
+            te, re_ = sem(by_cell[f"trained/{mode}"][task]), sem(by_cell[f"rand_all/{mode}"][task])
+            if None in (tm, rm, te, re_):
+                continue
+            d, sd = tm - rm, math.sqrt(te ** 2 + re_ ** 2)
+            print(f"  gap {task:6s} {mode:5s}: {d:+.3f} +/- {sd:.3f}   z = {d / sd:.1f}")
 
     import matplotlib
     matplotlib.use("Agg")
@@ -208,11 +222,13 @@ def analyze():
     for cx, c in zip(centers, CELLS):
         cell = cell_name(*c)
         fz, dt = mean(by_cell[cell]["fuzz"]), mean(by_cell[cell]["detect"])
+        fe, de = sem(by_cell[cell]["fuzz"]), sem(by_cell[cell]["detect"])
+        EB = dict(ecolor=INK, capsize=3, elinewidth=1)
         if fz is not None:
-            ax.bar(cx - 0.17, fz, 0.34, color=BLUE, zorder=3)
+            ax.bar(cx - 0.17, fz, 0.34, color=BLUE, zorder=3, yerr=fe, error_kw=EB)
             ax.text(cx - 0.17, fz + 0.012, f"{fz:.2f}", ha="center", fontsize=8, color=MUTED)
         if dt is not None:
-            ax.bar(cx + 0.17, dt, 0.34, color=ORANGE, zorder=3)
+            ax.bar(cx + 0.17, dt, 0.34, color=ORANGE, zorder=3, yerr=de, error_kw=EB)
             ax.text(cx + 0.17, dt + 0.012, f"{dt:.2f}", ha="center", fontsize=8, color=MUTED)
     ax.axhline(0.5, color=MUTED, linewidth=1, linestyle="--", zorder=2)
     ax.text(3.95, 0.505, "chance", fontsize=8, color=MUTED, va="bottom", ha="right")
