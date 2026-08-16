@@ -5,7 +5,20 @@ import os
 
 from activations import (load_model, activation_stream, take_sample,   # on-the-fly gemma activations
                          LAYER, MAP_FILE)   # LAYER is env-driven there; do NOT redefine it here
-from hf_io import push, pull                                         # artifacts live on HF, not a volume
+from hf_io import push as _push_raw, pull                            # artifacts live on HF, not a volume
+
+
+def push(path, name=None):
+    """push() that never propagates. A failed upload used to raise INSIDE the training loop and
+    kill the run -- exactly how the 2026-08-16 topk rand run died at step 20k when HF private
+    storage filled, losing 12 h of compute for a network-layer problem. The weights are always
+    on local disk first; a lost upload is recoverable, a lost process is not."""
+    try:
+        return _push_raw(path, name) if name else _push_raw(path)
+    except Exception as e:
+        print(f"  !! push FAILED for {os.path.basename(path)} ({type(e).__name__}: {e})")
+        print(f"  !! training CONTINUES; the file is still at {path}")
+        return None
 from sae_arch import make_sae, ARCHS                                 # batchtopk (ours) | topk (the paper's)
 
 MODEL_NAME = "google/gemma-2-2b"
@@ -24,6 +37,7 @@ TRAIN_TOKENS = int(os.environ.get("TRAIN_TOKENS", 20_000_000))  # cap training l
 BUFFER_TOKENS = int(os.environ.get("BUFFER_TOKENS", 1_000_000))  # rolling shuffle buffer for the activation stream
 PUSH_EVERY    = int(os.environ.get("PUSH_EVERY", 10_000))        # push the rolling checkpoint to HF every N steps
 CKPT_TOKENS   = int(os.environ.get("CKPT_TOKENS", 20_000_000))   # push a frozen milestone ckpt every N tokens (0 = off)
+RESUME        = os.environ.get("RESUME", "") not in ("", "0")    # continue from {BASE}_latest.pt
 OUT_DIR = os.environ.get("OUT_DIR", "/workspace/out")            # local scratch (ephemeral); the real home is HF
 os.makedirs(OUT_DIR, exist_ok=True)
 
@@ -96,8 +110,8 @@ t.cuda.empty_cache()
 # shuffled rolling buffer -- no /workspace cache, no network volume. The residual / normalization is
 # still built per-step in the loop, because in hybrid mode P[token] goes through the TRAINABLE map.
 def iter_batches():
-    return activation_stream(model, device, batch=BATCH,
-                             buffer_tokens=BUFFER_TOKENS, seed=SEED, max_tokens=TRAIN_TOKENS)
+    return activation_stream(model, device, batch=BATCH, buffer_tokens=BUFFER_TOKENS,
+                             seed=STREAM_SEED, max_tokens=TRAIN_TOKENS - seen_tokens)
 
 # hybrid jointly trains the linear map (warm-started from the fitted map) alongside the SAE
 params = list(sae.parameters()) + (list(linear_map.parameters()) if MODE in ("hybrid", "outbias") else [])
@@ -106,8 +120,35 @@ n_since_fired = t.zeros(D_SAE, device=device)
 DEAD_WINDOW = 200
 N = 100
 seen_tokens = 0
-next_milestone = CKPT_TOKENS if CKPT_TOKENS else None
-for step, (h_batch, tok_batch) in enumerate(iter_batches()):
+start_step = 0
+
+if RESUME:
+    # The rolling checkpoint carries weights, optimizer moments, dead-neuron counters and the step.
+    # SCALE comes from it too: it is a property of the run, and recomputing it from a fresh sample
+    # would silently shift the SAE's input distribution mid-training.
+    rp = f"{OUT_DIR}/{BASE}_latest.pt"
+    if not os.path.exists(rp):
+        rp = pull(f"{BASE}_latest.pt")
+    _ck = t.load(rp, weights_only=False)
+    sae.load_state_dict(_ck["sae"])
+    opt.load_state_dict(_ck["opt"])
+    n_since_fired = _ck["n_since_fired"].to(device)
+    if MODE in ("hybrid", "outbias") and "linear_map" in _ck:
+        linear_map.load_state_dict(_ck["linear_map"])
+    scale = _ck["scale"]
+    start_step = int(_ck["step"])
+    seen_tokens = start_step * BATCH
+    print(f"[train] RESUMED from {rp}: step {start_step:,}, {seen_tokens:,} tokens, scale {float(scale):.4f}")
+
+# Resuming does NOT replay the consumed stream -- re-streaming 82M tokens to reach the old position
+# would cost as much as the remaining training. A fresh seed draws different openwebtext documents,
+# which is statistically equivalent (100M tokens is a sliver of the corpus) but does mean a resumed
+# run is not bit-identical to an uninterrupted one. Recorded here so nobody wonders later.
+STREAM_SEED = SEED if not RESUME else SEED + 1000 + start_step
+next_milestone = None
+if CKPT_TOKENS:
+    next_milestone = ((seen_tokens // CKPT_TOKENS) + 1) * CKPT_TOKENS
+for step, (h_batch, tok_batch) in enumerate(iter_batches(), start=start_step):
     dead = n_since_fired > DEAD_WINDOW
 
     if MODE == "hybrid":
