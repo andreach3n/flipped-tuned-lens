@@ -47,59 +47,69 @@ def rates(tp, fn, tn, fp):
     return tpr, se_tpr, tnr, se_tnr, (tpr + tnr) / 2, math.sqrt(se_tpr**2 + se_tnr**2) / 2
 
 
-# DOTS, not bars. These are bounded metrics whose meaningful floor is 0.5 (chance), not 0, so the
-# axis has to be truncated to read the differences -- and a truncated BAR lies, because bar length
-# encodes magnitude. Position-encoded marks make the same axis honest, and put the error bars
-# (the point of the figure) in the foreground.
-fig, (axA, axB) = plt.subplots(1, 2, figsize=(10.5, 4.4), dpi=200)
-W, MS = 0.16, 9
+# Bars of (metric - 0.5), i.e. ABOVE CHANCE. Two problems solved at once: chance is the real zero
+# for these metrics, so bar length now encodes something (discriminative signal) and the baseline is
+# honest rather than truncated; and the axis shrinks ~5x, which is what makes an SE of ~0.008
+# visible at all. The twin axis on the right restores the raw values people quote -- that is a unit
+# conversion of one scale, not a second measure, so it is not a dual-axis chart.
+CHANCE = 0.5
+fig, (axA, axB) = plt.subplots(1, 2, figsize=(11, 4.8), dpi=200)
+W, EB = 0.34, dict(ecolor=INK, capsize=4, elinewidth=1.4)
 
 # ---- A: balanced accuracy, grouped by arm ---------------------------------------------------
 for i, sc in enumerate(SCORERS):
     xs = [j + (i - 0.5) * W for j in range(len(ARMS))]
-    ys = [rates(*COUNTS[a][sc])[4] for a in ARMS]
+    raw = [rates(*COUNTS[a][sc])[4] for a in ARMS]
     es = [rates(*COUNTS[a][sc])[5] for a in ARMS]
-    c = BLUE if sc == "detection" else ORANGE
-    axA.errorbar(xs, ys, yerr=es, fmt="o", ms=MS, color=c, ecolor=c,
-                 elinewidth=1.6, capsize=4, zorder=3, label=sc,
-                 markeredgecolor="white", markeredgewidth=1.2)
-    for x, y in zip(xs, ys):                       # visible labels: the contrast relief
-        axA.text(x + 0.10, y, f"{y:.3f}", ha="left", va="center", fontsize=8.5, color=MUTED)
+    axA.bar(xs, [y - CHANCE for y in raw], W, yerr=es, error_kw=EB, zorder=3,
+            color=(BLUE if sc == "detection" else ORANGE), label=sc)
+    for x, y, e in zip(xs, raw, es):               # raw value: what gets quoted, and contrast relief
+        axA.text(x, y - CHANCE + e + 0.006, f"{y:.3f}", ha="center", fontsize=8.5, color=MUTED)
 
-axA.axhline(0.5, ls="--", lw=1, color=MUTED, zorder=2)
-axA.text(1.57, 0.507, "chance", ha="right", fontsize=8, color=MUTED)
+axA.axhline(0, lw=1, color=MUTED, zorder=2)
 axA.set_xticks(range(len(ARMS)), ["trained gemma", "randomized gemma"])
-axA.set_xlim(-0.5, 1.6)
-axA.set_ylabel("class-balanced accuracy")
-axA.set_ylim(0.4, 0.78)
+axA.set_xlim(-0.6, 1.6)
+axA.set_ylabel("class-balanced accuracy above chance")
+axA.set_ylim(0, 0.215)
+_a = axA.twinx()
+_a.set_ylim(CHANCE, CHANCE + 0.215)
+_a.set_ylabel("(raw balanced accuracy)", color=MUTED, fontsize=9)
+_a.tick_params(colors=MUTED, labelsize=8)
+for sp in ("top",):
+    _a.spines[sp].set_visible(False)
 axA.set_title("A  the arms separate in delphi's own pipeline", fontsize=10, loc="left", color=INK)
-axA.legend(frameon=False, fontsize=9, loc="lower left")
+axA.legend(frameon=False, fontsize=9, loc="upper right")
 
 # ---- B: TPR vs TNR -- the response-bias mechanism --------------------------------------------
 for i, (lab, idx) in enumerate([("true positive rate", 0), ("true negative rate", 2)]):
     xs = [j + (i - 0.5) * W for j in range(len(ARMS))]
     r = [rates(*COUNTS[a]["detection"]) for a in ARMS]
-    ys, es = [v[idx] for v in r], [v[idx + 1] for v in r]
-    c = BLUE if idx == 0 else ORANGE
-    axB.errorbar(xs, ys, yerr=es, fmt="o", ms=MS, color=c, ecolor=c,
-                 elinewidth=1.6, capsize=4, zorder=3, label=lab,
-                 markeredgecolor="white", markeredgewidth=1.2)
-    for x, y in zip(xs, ys):
-        axB.text(x + 0.10, y, f"{y:.3f}", ha="left", va="center", fontsize=8.5, color=MUTED)
+    raw, es = [v[idx] for v in r], [v[idx + 1] for v in r]
+    axB.bar(xs, [y - CHANCE for y in raw], W, yerr=es, error_kw=EB, zorder=3,
+            color=(BLUE if idx == 0 else ORANGE), label=lab)
+    for x, y, e in zip(xs, raw, es):
+        off = (e + 0.008) if y >= CHANCE else -(e + 0.022)
+        axB.text(x, y - CHANCE + off, f"{y:.3f}", ha="center", fontsize=8.5, color=MUTED)
 
-axB.axhline(0.5, ls="--", lw=1, color=MUTED, zorder=2)
-axB.text(1.57, 0.507, "chance", ha="right", fontsize=8, color=MUTED)
+axB.axhline(0, lw=1, color=MUTED, zorder=2)
 axB.set_xticks(range(len(ARMS)), ["trained gemma", "randomized gemma"])
-axB.set_xlim(-0.5, 1.6)
-axB.set_ylabel("rate (detection scorer)")
-axB.set_ylim(0.3, 0.92)
+axB.set_xlim(-0.6, 1.6)
+axB.set_ylabel("rate above chance (detection scorer)")
+axB.set_ylim(-0.12, 0.32)
+axB.annotate("below chance:\nthe judge is agreeing,\nnot discriminating",
+             xy=(1 + 0.5 * W, -0.055), xytext=(0.30, -0.095), fontsize=8, color=MUTED,
+             arrowprops=dict(arrowstyle="->", color=MUTED, lw=0.9))
+_b = axB.twinx()
+_b.set_ylim(CHANCE - 0.12, CHANCE + 0.32)
+_b.set_ylabel("(raw rate)", color=MUTED, fontsize=9)
+_b.tick_params(colors=MUTED, labelsize=8)
+_b.spines["top"].set_visible(False)
 axB.set_title("B  on the random arm the judge agrees rather than discriminates",
               fontsize=10, loc="left", color=INK)
-axB.legend(frameon=False, fontsize=9, loc="lower left")
+axB.legend(frameon=False, fontsize=9, loc="upper left")
 
 for ax in (axA, axB):
     ax.grid(axis="y", color=GRID, lw=0.6, zorder=0)
-    ax.axvline(0.5, color=GRID, lw=0.8, zorder=0)
     ax.set_axisbelow(True)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
@@ -108,8 +118,8 @@ for ax in (axA, axB):
 fig.suptitle("delphi + Llama-3.1-70B on gemma-2-2b layer 13 (TopK SAEs, 100M tokens, 100 latents/arm)",
              fontsize=11, color=INK, y=0.99)
 fig.text(0.5, 0.005,
-         "Error bars: ±1 SE over scoring decisions. Decisions cluster within latents, so true "
-         "uncertainty is ~1.5–2× larger.",
+         "Bars show distance above chance (0.5); labels give the raw value. Error bars: ±1 SE over "
+         "scoring decisions \u2014 decisions cluster within latents, so true uncertainty is ~1.5\u20132\u00d7 larger.",
          ha="center", fontsize=8, color=MUTED)
 fig.tight_layout(rect=(0, 0.03, 1, 0.95))
 
