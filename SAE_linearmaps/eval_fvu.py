@@ -45,10 +45,10 @@ import os
 import json
 import torch as t
 import torch.nn as nn
-from sae_lens import BatchTopKTrainingSAE
 
 from activations import (load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED, MAP_FILE)
 from hf_io import push, pull
+from sae_arch import load_sae as _rebuild_sae, arch_of
 
 K_SAE    = int(os.environ.get("K", 64))
 SUFFIX   = os.environ.get("SUFFIX", "")                 # tagged runs, e.g. _d73728_100M (see train_sae_res.py)
@@ -69,12 +69,11 @@ print(f"[eval_fvu] VARIANT={VARIANT} INIT_SEED={INIT_SEED} layer={LAYER} K={K_SA
 def load_sae(name):
     """Pull a checkpoint from this arm's HF repo and rebuild the SAE + its activation scale."""
     ckpt = t.load(pull(name), weights_only=False)
-    sae = BatchTopKTrainingSAE(ckpt["cfg"])
-    sae.load_state_dict(ckpt["sae"])
+    sae = _rebuild_sae(ckpt)
     sae.to(device).eval()
     # Echo the geometry actually loaded. K/SUFFIX only pick a FILENAME -- this is the cheap check
     # that the file holds the config you think it does (e.g. d_sae 73728, not the old 16384).
-    print(f"  {name}: d_sae={sae.cfg.d_sae} k={sae.cfg.k} step={ckpt.get('step')} "
+    print(f"  {name}: arch={arch_of(ckpt)} d_sae={sae.cfg.d_sae} k={sae.cfg.k} step={ckpt.get('step')} "
           f"tokens={ckpt.get('tokens', 'final')}")
     return sae, float(ckpt["scale"]), ckpt
 

@@ -29,7 +29,6 @@ import os
 import json
 import torch as t
 import torch.nn as nn
-from sae_lens import BatchTopKTrainingSAE, BatchTopKTrainingSAEConfig
 from sae_lens.saes.sae import TrainStepInput
 
 import sys
@@ -38,6 +37,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from activations import (load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED, MAP_FILE)
 from hf_io import push, pull
+from sae_arch import make_sae, ARCHS
 
 MODE         = os.environ.get("MODE", "resid")                        # "full" | "resid"
 K            = int(os.environ.get("K", 64))
@@ -48,6 +48,7 @@ COV_TOKENS   = int(os.environ.get("COV_TOKENS", 5_000_000))           # n >> d=2
 TRAIN_TOKENS = int(os.environ.get("TRAIN_TOKENS", 20_000_000))        # MATCH the real runs
 EVAL_TOKENS  = int(os.environ.get("EVAL_TOKENS", 2_000_000))
 RIDGE        = float(os.environ.get("RIDGE", 1e-6))                   # keeps Sigma positive-definite
+SAE_ARCH     = os.environ.get("SAE_ARCH", "batchtopk")   # MATCH the run being nulled
 SEED         = int(os.environ.get("SEED", 0))
 OUT_DIR      = os.environ.get("OUT_DIR", "/workspace/out")
 assert MODE in ("full", "resid"), f"MODE={MODE!r} must be 'full' or 'resid'"
@@ -62,6 +63,7 @@ if LAYER != 13:                 SUFFIX += f"_L{LAYER}"
 if D_SAE != 16384:             SUFFIX += f"_d{D_SAE}"
 if LR != 4e-4:                 SUFFIX += f"_lr{LR:g}"
 if TRAIN_TOKENS != 20_000_000: SUFFIX += f"_{TRAIN_TOKENS // 1_000_000}M"
+if SAE_ARCH != "batchtopk":    SUFFIX += f"_{SAE_ARCH}"
 print(f"[gauss_null] MODE={MODE} K={K} D_SAE={D_SAE} TRAIN_TOKENS={TRAIN_TOKENS:,} SUFFIX={SUFFIX!r}")
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
@@ -125,14 +127,14 @@ def synth(bs):
 
 
 # ---- the SAE: identical config, init and optimizer to the real runs ----
-cfg = BatchTopKTrainingSAEConfig(
+t.manual_seed(SEED)
+sae = make_sae(
+    SAE_ARCH,
     d_in=D_IN, d_sae=D_SAE, k=K,
     dtype="float32", device=str(device),
     apply_b_dec_to_input=True,
     normalize_activations="none",
-)
-t.manual_seed(SEED)
-sae = BatchTopKTrainingSAE(cfg).to(device)
+).to(device)
 
 # same scalar normalization the real runs apply, measured the same way
 with t.no_grad():

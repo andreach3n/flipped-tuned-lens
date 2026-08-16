@@ -26,7 +26,6 @@ Run on a free GPU of the training pod (needs the random arm's repo):
 import os
 import json
 import torch as t
-from sae_lens import BatchTopKTrainingSAE
 
 import sys
 # this experiment lives in SAE_linearmaps/randomized/ -- the shared modules
@@ -34,6 +33,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from activations import load_model, activation_stream, D_IN, LAYER, VARIANT, INIT_SEED
 from hf_io import push, pull
+from sae_arch import load_sae as _rebuild_sae, arch_of
 
 N_TOKENS = int(os.environ.get("N_TOKENS", 2_000_000))   # FVU converges fast; 2M is plenty
 BATCH    = int(os.environ.get("BATCH", 8192))
@@ -56,8 +56,7 @@ print(f"[eval_lr_sweep] VARIANT={VARIANT} INIT_SEED={INIT_SEED} layer={LAYER} "
 saes = []
 for label, name in RUNS:
     ckpt = t.load(pull(name), weights_only=False)
-    sae = BatchTopKTrainingSAE(ckpt["cfg"])
-    sae.load_state_dict(ckpt["sae"])
+    sae = _rebuild_sae(ckpt)
     sae.to(device).eval()
     d_sae = sae.cfg.d_sae
     saes.append({

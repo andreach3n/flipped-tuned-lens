@@ -1,4 +1,3 @@
-from sae_lens import BatchTopKTrainingSAE, BatchTopKTrainingSAEConfig
 from sae_lens.saes.sae import TrainStepInput
 import torch as t
 import torch.nn as nn
@@ -7,6 +6,7 @@ import os
 from activations import (load_model, activation_stream, take_sample,   # on-the-fly gemma activations
                          LAYER, MAP_FILE)   # LAYER is env-driven there; do NOT redefine it here
 from hf_io import push, pull                                         # artifacts live on HF, not a volume
+from sae_arch import make_sae, ARCHS                                 # batchtopk (ours) | topk (the paper's)
 
 MODEL_NAME = "google/gemma-2-2b"
 D_IN=2304
@@ -15,6 +15,10 @@ K     = int(os.environ.get("K", 64))          # sweep: K=32 MODE=full python tra
 LR    = float(os.environ.get("LR", 4e-4))     # sweep: LR=1e-4 / 1e-3
 BATCH = 4096
 MODE = os.environ.get("MODE", "hybrid")    # "full" | "resid" | "hybrid" | "outbias"
+# SAE_ARCH=topk gives PER-TOKEN top-k, which is what Heap et al. used and the only rule
+# sparsify/delphi can express -- use it for runs meant to go through their pipeline.
+SAE_ARCH = os.environ.get("SAE_ARCH", "batchtopk")
+assert SAE_ARCH in ARCHS, f"SAE_ARCH={SAE_ARCH!r} not in {ARCHS}"
 SEED = int(os.environ.get("SEED", 0))      # reproducibility across the sweep fleet
 TRAIN_TOKENS = int(os.environ.get("TRAIN_TOKENS", 20_000_000))  # cap training length (FVU converges by ~20M)
 BUFFER_TOKENS = int(os.environ.get("BUFFER_TOKENS", 1_000_000))  # rolling shuffle buffer for the activation stream
@@ -32,20 +36,21 @@ if LAYER != 13:                 SUFFIX += f"_L{LAYER}"   # depth sweep; 13 keeps
 if D_SAE != 16384:              SUFFIX += f"_d{D_SAE}"
 if LR != 4e-4:                  SUFFIX += f"_lr{LR:g}"
 if TRAIN_TOKENS != 20_000_000:  SUFFIX += f"_{TRAIN_TOKENS // 1_000_000}M"
+if SAE_ARCH != "batchtopk":     SUFFIX += f"_{SAE_ARCH}"   # never let the two archs collide
 BASE = f"sae_{MODE}_k{K}{SUFFIX}"
-print(f"[train] layer={LAYER} mode={MODE} artifact base name: {BASE}")
+print(f"[train] layer={LAYER} mode={MODE} arch={SAE_ARCH} artifact base name: {BASE}")
 
 device = t.device("cuda" if t.cuda.is_available() else "cpu")
 model = load_model(device)                 # kept resident: activations are generated live during training
 
-cfg = BatchTopKTrainingSAEConfig(
+t.manual_seed(SEED)                        # deterministic SAE init (reproducible fleet)
+sae = make_sae(
+    SAE_ARCH,
     d_in=D_IN, d_sae=D_SAE, k=K,
     dtype="float32", device=str(device),
     apply_b_dec_to_input=True,
     normalize_activations="none",   # you normalize in iter_batches
-)
-t.manual_seed(SEED)                        # deterministic SAE init (reproducible fleet)
-sae = BatchTopKTrainingSAE(cfg).to(device)
+).to(device)
 
 linear_map = nn.Linear(2304, 2304).to(device)
 map_path = pull(MAP_FILE)      # pulled from HF (run fit_map.py once to create it)

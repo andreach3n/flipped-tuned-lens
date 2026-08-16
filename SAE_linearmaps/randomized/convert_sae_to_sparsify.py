@@ -1,21 +1,21 @@
-"""Convert a sae_lens BatchTopK SAE into the sparsify format delphi loads.
+"""Convert a sae_lens TopK / BatchTopK SAE into the sparsify format delphi loads.
 
 Delphi (`python -m delphi <model> <sae_dir> --hookpoints ...`) calls
 SparseCoder.load_from_disk(<sae_dir>/<hookpoint>), i.e. it wants a directory per hookpoint holding
-cfg.json + sae.safetensors. Our SAEs are sae_lens BatchTopKTrainingSAE checkpoints, so they have
-to be re-expressed. Three things have to be folded in, and getting any of them wrong produces
+cfg.json + sae.safetensors. Our SAEs are sae_lens checkpoints, so they have to be re-expressed. Three things have to be folded in, and getting any of them wrong produces
 plausible-looking numbers rather than an error:
 
 1. SCALE. Our SAEs were trained on x = h / scale, but delphi feeds the RAW activation h. The
    scalar therefore has to move into the weights.
 2. apply_b_dec_to_input=True. Our encoder sees (x - b_dec), which is an extra bias term delphi
    knows nothing about.
-3. TOP-K SEMANTICS -- the one with no exact answer. sae_lens BatchTopK flattens the batch and
-   keeps the top k*n_tokens activations overall (verified: BatchTopK.forward has no self.training
-   branch, so this holds in eval too). sparsify's TopK keeps k per token. They agree in
-   EXPECTATION but not per token: batch-topk lets a token in a dull batch fire more than k.
-   We convert to per-token TopK at the same k, which is the closer of the two available choices
-   and, being applied identically to both arms, cannot bias the trained-vs-random comparison.
+3. TOP-K SEMANTICS -- exact for SAE_ARCH=topk, approximate for batchtopk. sparsify only offers
+   per-token topk (and groupmax); there is no threshold/jumprelu option. A topk checkpoint
+   therefore converts EXACTLY. A batchtopk one does not: sae_lens flattens the batch and keeps
+   the top k*n_tokens overall (verified -- BatchTopK.forward has no self.training branch, so this
+   holds at eval too), letting a token in a dull batch fire more than k. The agreement is printed
+   below. Prefer training with SAE_ARCH=topk for anything destined for delphi: it is also the
+   architecture Heap et al. used, so it removes two divergences at once.
 
 The algebra, with `enc`/`dec` in sae_lens orientation (W_enc (d_in,d_sae), W_dec (d_sae,d_in)):
     pre  = (h/scale - b_dec) @ W_enc + b_enc  =  h @ (W_enc/scale) + (b_enc - b_dec @ W_enc)
@@ -40,6 +40,7 @@ import torch as t
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from hf_io import pull
+from sae_arch import load_sae as _rebuild_sae, arch_of
 
 SAE_NAME  = os.environ.get("SAE_NAME", "sae_full_k32_d73728_100M_final.pt")
 HOOKPOINT = os.environ.get("HOOKPOINT", "model.layers.13")
@@ -47,11 +48,9 @@ OUT_DIR   = os.environ.get("OUT_DIR", "/workspace/sparsify_sae")
 TOL       = float(os.environ.get("TOL", 2e-3))     # relative, on pre-activations
 
 # ---- load ours ------------------------------------------------------------------------------
-from sae_lens import BatchTopKTrainingSAE
 
 ckpt = t.load(pull(SAE_NAME), weights_only=False)
-sae = BatchTopKTrainingSAE(ckpt["cfg"])
-sae.load_state_dict(ckpt["sae"])
+sae = _rebuild_sae(ckpt)
 sae.eval()
 scale = float(ckpt["scale"])
 sd = sae.state_dict()

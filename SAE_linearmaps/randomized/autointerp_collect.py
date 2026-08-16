@@ -73,11 +73,12 @@ SEL_FILE  = f"autointerp_selection{SUFFIX}.json"
 
 
 def load_sae(name):
-    from sae_lens import BatchTopKTrainingSAE
+    # Class comes from the SAVED cfg, never a hardcode: a topk checkpoint rebuilt as batchtopk
+    # would apply the wrong sparsity rule and yield plausible, wrong activations.
+    from sae_arch import load_sae as _rebuild_sae, arch_of
     ckpt = t.load(pull(name), weights_only=False)
-    sae = BatchTopKTrainingSAE(ckpt["cfg"])
-    sae.load_state_dict(ckpt["sae"])
-    sae.to(device).eval()
+    sae = _rebuild_sae(ckpt).to(device).eval()
+    print(f"  {name}: arch={arch_of(ckpt)} d_sae={sae.cfg.d_sae} k={sae.cfg.k}")
     return sae, float(ckpt["scale"])
 
 
