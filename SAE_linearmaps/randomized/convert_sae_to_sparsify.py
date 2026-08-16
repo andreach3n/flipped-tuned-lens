@@ -53,7 +53,9 @@ ckpt = t.load(pull(SAE_NAME), weights_only=False)
 sae = _rebuild_sae(ckpt)
 sae.eval()
 scale = float(ckpt["scale"])
-sd = sae.state_dict()
+# .cpu() because the checkpoint's cfg names its training device, so a GPU-trained SAE loads onto
+# cuda while the SparseCoder we build and the verification tensors live on the host.
+sd = {k_: v.detach().float().cpu() for k_, v in sae.state_dict().items()}
 W_enc, b_enc = sd["W_enc"], sd["b_enc"]          # (d_in, d_sae), (d_sae,)
 W_dec, b_dec = sd["W_dec"], sd["b_dec"]          # (d_sae, d_in), (d_in,)
 d_in, d_sae = W_enc.shape
