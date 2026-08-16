@@ -104,15 +104,22 @@ print(f"  pre-activation max rel err: {rel:.2e}  ({'OK' if rel < TOL else 'FAIL'
 if rel >= TOL:
     sys.exit("folding is wrong -- do NOT use this checkpoint")
 
-# how much does the top-k convention actually change? report, do not gate.
-with t.no_grad():
-    flat = ours.flatten()
-    thr = flat.topk(k * ours.shape[0]).values.min()             # sae_lens batch-topk threshold
-    batch_mask = ours >= thr
-    tok_mask = t.zeros_like(ours, dtype=t.bool)
-    tok_mask.scatter_(1, ours.topk(k, dim=-1).indices, True)    # sparsify per-token topk
-    agree = (batch_mask & tok_mask).sum().item() / max(tok_mask.sum().item(), 1)
-print(f"  top-k mask agreement batch-vs-per-token: {100*agree:.1f}% of fired latents")
+# Does the sparsity RULE survive the conversion? Only a question for a batchtopk source: sparsify
+# is per-token topk, so a topk source converts exactly and there is nothing to measure. Printing
+# the batch-vs-token disagreement for a topk SAE would just alarm the reader about a rule its
+# checkpoint does not use.
+src_arch = arch_of(ckpt)
+if src_arch == "topk":
+    print(f"  sparsity rule: EXACT (source is per-token topk, same as sparsify)")
+else:
+    with t.no_grad():
+        thr = ours.flatten().topk(k * ours.shape[0]).values.min()    # sae_lens batch-topk threshold
+        batch_mask = ours >= thr
+        tok_mask = t.zeros_like(ours, dtype=t.bool)
+        tok_mask.scatter_(1, ours.topk(k, dim=-1).indices, True)     # sparsify per-token topk
+        agree = (batch_mask & tok_mask).sum().item() / max(tok_mask.sum().item(), 1)
+    print(f"  sparsity rule: APPROXIMATE (source is {src_arch}); batch-vs-per-token masks agree on "
+          f"{100*agree:.1f}% of fired latents -- retrain with SAE_ARCH=topk to remove this")
 
 os.makedirs(f"{OUT_DIR}/{HOOKPOINT}", exist_ok=True)
 sc.save_to_disk(f"{OUT_DIR}/{HOOKPOINT}")
