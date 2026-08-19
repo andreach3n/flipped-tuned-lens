@@ -123,10 +123,22 @@ enc_w, enc_b = sp["encoder.weight"], sp["encoder.bias"]
 print(f"\n  sparsify encoder: {hits[0]}")
 
 
-def firings(h, k=K):
-    """(flat_pos, latent) pairs delphi would cache for these activations, restricted to <MAX_LATENTS."""
+sp_b_dec = sp["b_dec"]
+
+
+def firings(h, subtract_b_dec, k=K):
+    """(flat_pos, latent) pairs for these activations, restricted to <MAX_LATENTS.
+
+    `subtract_b_dec` is the whole question. sparsify's SparseCoder.encode does
+        x = x - self.b_dec ; fused_encoder(x, encoder.weight, encoder.bias, k, act)
+    i.e. it applies the b_dec correction ITSELF. convert_sae_to_sparsify.py additionally folded
+    b_dec into encoder.bias (b_enc - b_dec @ W_enc), so delphi subtracts it TWICE. The converter
+    never caught this because it verified `h @ encoder.weight.T + encoder.bias` by hand rather
+    than calling encode.
+    """
     with t.no_grad():
-        pre = h @ enc_w.T + enc_b
+        x = (h - sp_b_dec) if subtract_b_dec else h
+        pre = x @ enc_w.T + enc_b
         idx = t.topk(pre, k, dim=-1).indices
     out = set()
     a = idx.cpu().numpy()
@@ -151,20 +163,28 @@ for p in ref_shards:
 
 print(f"\n  reference firings (rows<{ROWS}, latents<{MAX_LATENTS}): {len(ref):,}")
 best = None
-for label, h in (("TL  h", h_tl), ("HF  h", h_hf)):
-    ours = firings(h)
-    inter = len(ref & ours)
-    jac = inter / max(len(ref | ours), 1)
-    print(f"    {label} -> sparsify encoder: {len(ours):,} firings | {inter:,} shared | Jaccard {jac:.4f}")
-    if best is None or jac > best[1]:
-        best = (label, jac)
+for label, h in (("TL h", h_tl), ("HF h", h_hf)):
+    for sub in (False, True):
+        ours = firings(h, sub)
+        inter = len(ref & ours)
+        jac = inter / max(len(ref | ours), 1)
+        tag = "encode() incl. its own -b_dec" if sub else "encoder(h) as the converter assumed"
+        print(f"    {label} | {tag:36s}: {len(ours):,} firings | {inter:,} shared | Jaccard {jac:.4f}")
+        if best is None or jac > best[2]:
+            best = (label, sub, jac)
 
-print(f"\n  VERDICT on the activation source: {best[0]} matches the reference best (Jaccard {best[1]:.4f})")
-if best[1] > 0.95:
-    print("    -> that backend reproduces delphi's cache. Use it.")
+print(f"\n  VERDICT: best is {best[0]} with subtract_b_dec={best[1]} (Jaccard {best[2]:.4f})")
+if best[2] > 0.95 and best[1]:
+    print("    -> CONFIRMED: delphi applies b_dec TWICE, because convert_sae_to_sparsify.py folded "
+          "it into encoder.bias AND left it in b_dec, while sparsify's encode subtracts it itself.\n"
+          "    -> The fix is encoder.bias = b_enc (drop the -b_dec @ W_enc term).\n"
+          "    -> EVERY delphi result in this project so far was produced with this mis-biased "
+          "encoder and needs rerunning.")
+elif best[2] > 0.95:
+    print("    -> that configuration reproduces delphi's cache; the converter's assumption held.")
 else:
-    print("    -> NEITHER backend reproduces the reference. The disagreement is not TL-vs-HF; "
-          "suspect the row/position indexing convention or the tokens<->locations alignment.")
+    print("    -> still no match. The disagreement is neither TL-vs-HF nor the b_dec convention; "
+          "suspect the row/position indexing or the tokens<->locations alignment.")
 
 # ---- second question: what does sae_lens' encode actually compute? -----------------------------
 print("\n  [encode] one token (flat position 0), top-8 by each route:")
@@ -181,8 +201,16 @@ print(f"                     val {[round(v, 3) for v in av.tolist()]}")
 print(f"    sae.encode nonzeros: {nz.numel()} (k={K})")
 same = set(mi.tolist()) == set(ai.tolist())
 print(f"    same top-8 latents: {same}")
-if not same:
-    print("    -> sae.encode is NOT topk((x - b_dec) @ W_enc + b_enc). The fold in "
-          "convert_sae_to_sparsify.py does not reproduce the trained SAE's own encode, which "
-          "would affect the EXISTING delphi arms as well as this one. Worth resolving before "
-          "quoting any delphi number.")
+
+# The values differ even when the latents agree, so encode applies a PER-LATENT factor. Identify
+# it: sae_lens variants rescale feature acts by the decoder column norm. If the ratio tracks
+# ||W_dec_j|| (or its reciprocal), that is the whole story -- and it is harmless downstream,
+# because delphi ranks examples WITHIN a latent, where a positive per-latent factor cancels.
+# What it does change is which latents win the top-k at a token, i.e. the selection.
+with t.no_grad():
+    ratio = (acts[0][mi] / pre_manual[0][mi]).cpu()
+    dnorm = sd["W_dec"][mi].norm(dim=-1).cpu()
+print(f"    encode/manual ratio: {[round(v, 4) for v in ratio.tolist()]}")
+print(f"    ||W_dec_j||        : {[round(v, 4) for v in dnorm.tolist()]}")
+print(f"    ratio * ||W_dec||  : {[round(v, 4) for v in (ratio * dnorm).tolist()]}")
+print("    (a constant row in the last line means encode = manual / ||W_dec_j||)")
