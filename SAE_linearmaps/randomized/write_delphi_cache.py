@@ -118,6 +118,21 @@ MAX_ROWS  = int(_mr) if _mr else None
 # (cosine 0.9997) which flips ~8% of firings at the k-boundary, so exact reproduction needs hf.
 EMULATE = os.environ.get("EMULATE_SPARSIFY", "").strip()
 BACKEND = os.environ.get("BACKEND", "tl").strip().lower()
+# PREPEND_BOS -- NOT cosmetic, and the reason a first attempt produced a NEGATIVE linear-map
+# explained variance (2026-08-19). activations.py builds every training activation with
+# `model.to_tokens(text)`, which PREPENDS BOS, then drops position 0. So the SAEs and the linear
+# map only ever saw tokens in a BOS-prefixed context. delphi's rows have BOS stripped entirely
+# (filter_bos deletes it from the FLATTENED stream), and gemma-2 leans hard on the BOS attention
+# sink: |h| falls from the ~174 implied by the SAE's own scale to ~141. P then overshoots, and
+# h - P[tok] has MORE variance than h. We therefore run [BOS] + row and drop the BOS position,
+# which restores the training regime while leaving the stored tokens and position indices
+# untouched -- delphi cannot tell the difference.
+# This is a DELIBERATE divergence from delphi's own caching, and it applies to the plain SAE too:
+# the pre-2026-08-19 delphi runs fed out-of-distribution activations for the same reason.
+PREPEND_BOS = os.environ.get("PREPEND_BOS", "1").strip() not in ("", "0", "false", "no")
+if EMULATE and PREPEND_BOS:
+    PREPEND_BOS = False
+    print("  EMULATE_SPARSIFY set -> PREPEND_BOS forced off (emulation must match delphi exactly)")
 if BACKEND not in ("tl", "hf"):
     sys.exit(f"BACKEND={BACKEND!r} -- use 'tl' (default, matches how the SAEs were trained) or 'hf'")
 if BACKEND == "hf" and MODE == "resid":
@@ -156,6 +171,18 @@ print(f"  reference tokens: {N_ROWS:,} rows x {CTX_LEN} = {N_ROWS * CTX_LEN:,} t
 if N_PASS != N_ROWS:
     print(f"  MAX_ROWS={MAX_ROWS}: encoding only the first {N_PASS:,} rows. VALIDATION ONLY -- "
           f"do not score this cache.")
+
+BOS_ID = None
+if PREPEND_BOS:
+    from transformers import AutoTokenizer
+    with open(f"{REF_CACHE}/config.json") as _f:
+        _refm = json.load(_f).get("model_name", "google/gemma-2-2b")
+    BOS_ID = AutoTokenizer.from_pretrained(_refm).bos_token_id
+    if BOS_ID is None:
+        sys.exit(f"{_refm} has no bos_token_id but PREPEND_BOS is on")
+    n_bos = int((tokens_t[:N_PASS] == BOS_ID).sum())
+    print(f"  PREPEND_BOS: prefixing every row with token {BOS_ID} for the forward pass, then "
+          f"dropping it ({n_bos} BOS already present in the rows -- expect 0)")
 
 # ---- the model and the SAE, built exactly as eval_fvu.py builds them --------------------------
 model = load_model(device)
@@ -224,12 +251,19 @@ def encode_rows(tok_rows):
     sae_lens' encode already returns exactly that shape, with zeros off the top-k support.
     """
     tok = tok_rows.to(device)
+    # [BOS] + row, then drop the BOS column, so each of the row's 256 tokens is encoded in the
+    # BOS-prefixed context the SAEs were trained in. Shapes downstream are unchanged.
+    inp = t.cat([t.full((tok.shape[0], 1), BOS_ID, device=device, dtype=tok.dtype), tok], dim=1) \
+        if PREPEND_BOS else tok
     if BACKEND == "hf":
-        hf_model(tok)
-        h = _grab["x"].reshape(-1, D_IN).float()
+        hf_model(inp)
+        h3 = _grab["x"]
     else:
-        _, cache = model.run_with_cache(tok, names_filter=[HOOK], stop_at_layer=LAYER + 1)
-        h = cache[HOOK].reshape(-1, D_IN).float()              # (rows*ctx, 2304)
+        _, cache = model.run_with_cache(inp, names_filter=[HOOK], stop_at_layer=LAYER + 1)
+        h3 = cache[HOOK]                                       # (rows, ctx[+1], 2304)
+    if PREPEND_BOS:
+        h3 = h3[:, 1:]
+    h = h3.reshape(-1, D_IN).float()                           # (rows*ctx, 2304)
     flat_tok = tok.reshape(-1)
     r = (h - P[flat_tok]) if MODE == "resid" else h
 
@@ -260,8 +294,19 @@ with t.no_grad():
             # explained variance 0.5616 (trained) / 0.3212 (rand_all s0). A wrongly-scaled or
             # wrong-arm embedding source lands nowhere near those.
             var_h, var_r = h.var().item(), (x * scale).var().item()
-            print(f"  linear-map explained variance on batch 0: {1 - var_r / var_h:.4f} "
-                  f"(expect ~0.56 trained / ~0.32 rand_all)")
+            ev = 1 - var_r / var_h
+            print(f"  linear-map explained variance on batch 0: {ev:.4f} "
+                  f"(expect ~0.56 trained / ~0.32 rand_all) | mean |h| "
+                  f"{h.norm(dim=-1).mean():.2f} (expect ~{scale * D_IN ** 0.5:.0f})")
+            # HARD GATE. A wrong activation regime (e.g. PREPEND_BOS off) makes P overshoot and
+            # produces a residual the SAE never saw -- 2.5 h of plausible, useless cache. Die now.
+            if ev < 0.1 and os.environ.get("ALLOW_BAD_MAP", "") != "1":
+                sys.exit(f"\nABORT: explained variance {ev:.4f} means P does not fit these "
+                         f"activations, so h - P[tok] is out of distribution for this SAE.\n"
+                         f"  Most likely PREPEND_BOS is off: the map and the SAE were fit on "
+                         f"BOS-prefixed contexts (activations.py uses to_tokens, which prepends "
+                         f"BOS, then drops position 0), while delphi's rows carry no BOS.\n"
+                         f"  Set ALLOW_BAD_MAP=1 only if you intend this.")
 
         # nonzero on the FLAT (rows*ctx, d_sae) tensor returns rows ascending, then latent
         # ascending -- the same lexicographic order delphi's 3D nonzero produces, so a byte-level
