@@ -295,9 +295,13 @@ with t.no_grad():
             # wrong-arm embedding source lands nowhere near those.
             var_h, var_r = h.var().item(), (x * scale).var().item()
             ev = 1 - var_r / var_h
+            # NB: in resid mode `scale` normalizes r, not h -- so the |h| expectation comes from
+            # the FULL SAE's scale (3.6328 * sqrt(2304) ~ 174), not this checkpoint's.
             print(f"  linear-map explained variance on batch 0: {ev:.4f} "
-                  f"(expect ~0.56 trained / ~0.32 rand_all) | mean |h| "
-                  f"{h.norm(dim=-1).mean():.2f} (expect ~{scale * D_IN ** 0.5:.0f})")
+                  f"(expect ~0.56 trained / ~0.32 rand_all)")
+            print(f"  mean |h| {h.norm(dim=-1).mean():.2f} (expect ~174 in the training regime; "
+                  f"~141 means BOS is missing) | mean |r| {(x * scale).norm(dim=-1).mean():.2f} "
+                  f"(expect ~{scale * D_IN ** 0.5:.0f} from this SAE's scale)")
             # HARD GATE. A wrong activation regime (e.g. PREPEND_BOS off) makes P overshoot and
             # produces a residual the SAE never saw -- 2.5 h of plausible, useless cache. Die now.
             if ev < 0.1 and os.environ.get("ALLOW_BAD_MAP", "") != "1":
