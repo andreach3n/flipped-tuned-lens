@@ -1,0 +1,1 @@
+"Function words and suffixes that provide grammatical information, often indicating relationships between entities or ideas, such as prepositions, conjunctions, articles, and verb conjugations."

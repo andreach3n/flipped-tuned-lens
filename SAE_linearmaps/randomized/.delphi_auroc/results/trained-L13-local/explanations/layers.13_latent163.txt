@@ -1,0 +1,1 @@
+"Units of time, specifically months, used to describe a duration or a point in time."

@@ -1,0 +1,1 @@
+"Special characters and common punctuation marks, often indicating the start of a phrase or a function, and sometimes used in programming syntax."

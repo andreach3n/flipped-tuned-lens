@@ -1,0 +1,1 @@
+"Tokens that are often abbreviations, prefixes, or suffixes, sometimes indicating a unit of measurement, direction, or category, and are often used in technical or formal contexts."

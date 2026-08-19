@@ -1,0 +1,1 @@
+"Concatenation or assignment of a string value to a variable or attribute, often used in programming languages for tasks such as setting URLs, file paths, or data sources."

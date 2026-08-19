@@ -1,0 +1,1 @@
+"Non-ASCII characters, special characters, and single letters or short sequences of letters, often representing abbreviations, prefixes, or suffixes, or being part of a larger word."

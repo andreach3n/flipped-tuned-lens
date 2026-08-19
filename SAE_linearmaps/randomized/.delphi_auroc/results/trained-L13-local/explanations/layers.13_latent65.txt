@@ -1,0 +1,1 @@
+"Numerical values, often large quantities, represented by digits or words like \"thousand\" or \"thousands\"."

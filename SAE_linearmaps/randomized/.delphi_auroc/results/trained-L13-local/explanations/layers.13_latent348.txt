@@ -1,0 +1,1 @@
+"Numerical values, dates, and monetary amounts, often used to specify quantities, ranges, or time periods."

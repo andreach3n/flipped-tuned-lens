@@ -1,0 +1,1 @@
+"Tokens that are often file extensions, prepositions, conjunctions, articles, or other common function words, sometimes appearing in technical or formal contexts."

@@ -1,0 +1,59 @@
+{
+    "cache_cfg": {
+        "dataset_repo": "Skylion007/openwebtext",
+        "dataset_split": "train[:3%]",
+        "dataset_name": "",
+        "dataset_column": "text",
+        "batch_size": 32,
+        "cache_ctx_len": 256,
+        "n_tokens": 30000000,
+        "n_splits": 5
+    },
+    "constructor_cfg": {
+        "faiss_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+        "faiss_embedding_cache_dir": ".embedding_cache",
+        "faiss_embedding_cache_enabled": true,
+        "example_ctx_len": 32,
+        "min_examples": 200,
+        "n_non_activating": 50,
+        "center_examples": true,
+        "non_activating_source": "random",
+        "neighbours_type": "co-occurrence"
+    },
+    "sampler_cfg": {
+        "n_examples_train": 40,
+        "n_examples_test": 50,
+        "n_quantiles": 10,
+        "train_type": "quantiles",
+        "test_type": "quantiles",
+        "ratio_top": 0.2
+    },
+    "model": "google/gemma-2-2b",
+    "sparse_model": "/dev/shm/dl_trained-L13-local/sparsify_topk_L13",
+    "random": false,
+    "hookpoints": [
+        "layers.13"
+    ],
+    "explainer_model": "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
+    "explainer_model_max_len": 5120,
+    "explainer_provider": "offline",
+    "explainer": "default",
+    "scorers": [
+        "fuzz",
+        "detection"
+    ],
+    "fuzz_type": "default",
+    "name": "trained-L13-local",
+    "max_latents": 500,
+    "filter_bos": true,
+    "log_probs": true,
+    "load_in_8bit": false,
+    "hf_token": null,
+    "pipeline_num_proc": 64,
+    "num_gpus": 1,
+    "max_memory": 0.7,
+    "seed": 22,
+    "verbose": true,
+    "num_examples_per_scorer_prompt": 5,
+    "overwrite": []
+}

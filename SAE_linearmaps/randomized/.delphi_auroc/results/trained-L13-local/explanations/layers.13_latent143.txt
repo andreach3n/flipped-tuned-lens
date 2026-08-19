@@ -1,0 +1,1 @@
+"Tokens representing a distinct object, often a noun, often a noun, a location, or an organization, sometimes an abbreviation, and occasionally a verb or an adjective, often used to provide context or specify an entity."

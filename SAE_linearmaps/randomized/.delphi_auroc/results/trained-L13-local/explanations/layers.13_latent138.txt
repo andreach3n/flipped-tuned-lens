@@ -1,0 +1,1 @@
+"The digit \"2\" often appears in dates, and the activation is high when the \"2\" is part of a year, such as \"2014\", \"2017\", or \"1924\"."

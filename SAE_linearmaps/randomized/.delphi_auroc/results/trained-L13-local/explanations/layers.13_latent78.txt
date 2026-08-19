@@ -1,0 +1,1 @@
+"Tokens often represent a single character or a short sequence of characters, typically at the end of a word or a number, and are often used to denote a suffix, a comparative, or a unit of measurement, and sometimes a noun or a phrase that is part of a larger proper noun or a technical term."

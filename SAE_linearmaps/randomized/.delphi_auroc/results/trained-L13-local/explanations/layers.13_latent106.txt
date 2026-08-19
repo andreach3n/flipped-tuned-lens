@@ -1,0 +1,1 @@
+"Common nouns and words that are part of URLs, filenames, or code, often representing a key concept or identifier in a technical or digital context."

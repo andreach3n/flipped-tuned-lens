@@ -1,0 +1,1 @@
+"Tokens that are often ordinal, sequential, or comparative in nature, including numbers, suffixes, and words that indicate order or degree."
