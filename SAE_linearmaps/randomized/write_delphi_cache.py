@@ -110,6 +110,20 @@ MAX_LATENTS = int(_ml) if _ml else None
 # structurally valid -- but it is NOT a real run. Leave blank for anything you intend to score.
 _mr       = os.environ.get("MAX_ROWS", "").strip()
 MAX_ROWS  = int(_mr) if _mr else None
+# VALIDATION-ONLY knobs. EMULATE_SPARSIFY reproduces delphi's exact computation -- including the
+# two conversion bugs found 2026-08-19 -- so diff_delphi_cache.py can check this writer's SHARDING,
+# INDEXING and DTYPES against a real delphi cache. It does NOT produce a scientifically usable
+# cache: the point of the science runs is to use the trained SAE, which delphi's converted one is
+# not. BACKEND=hf uses AutoModel the way delphi does; TransformerLens differs by bf16 path noise
+# (cosine 0.9997) which flips ~8% of firings at the k-boundary, so exact reproduction needs hf.
+EMULATE = os.environ.get("EMULATE_SPARSIFY", "").strip()
+BACKEND = os.environ.get("BACKEND", "tl").strip().lower()
+if BACKEND not in ("tl", "hf"):
+    sys.exit(f"BACKEND={BACKEND!r} -- use 'tl' (default, matches how the SAEs were trained) or 'hf'")
+if BACKEND == "hf" and MODE == "resid":
+    sys.exit("BACKEND=hf is validation-only: MODE=resid needs P, which fit_map.py built from "
+             "TransformerLens' embedding table. Keep all science runs on BACKEND=tl so the four "
+             "cells share one activation pipeline.")
 
 if MODE not in ("resid", "full"):
     sys.exit(f"MODE={MODE!r} -- this script handles 'resid' (the point of it) and 'full' (validation)")
@@ -175,20 +189,56 @@ if MODE == "resid":
         P = linear_map(model.embed(t.arange(V, device=device)).float())      # (V, 2304)
     print(f"  rebuilt P from {MAP_FILE}: {tuple(P.shape)}")
 
+# ---- the activation source --------------------------------------------------------------------
+hf_model, _grab = None, {}
+if BACKEND == "hf":
+    # delphi's load_artifacts: AutoModel (not ForCausalLM), bf16, cuda; its hook takes output[0].
+    from transformers import AutoModel
+    _src = os.environ.get("HF_MODEL_PATH", "google/gemma-2-2b")
+    hf_model = AutoModel.from_pretrained(_src, torch_dtype=t.bfloat16).to(device).eval()
+    _target = [n for n, _ in hf_model.named_modules() if n.endswith(f"layers.{LAYER}")][0]
+    dict(hf_model.named_modules())[_target].register_forward_hook(
+        lambda _m, _i, o: _grab.__setitem__("x", o[0] if isinstance(o, tuple) else o))
+    print(f"  BACKEND=hf: {_src} hooked at {_target} (validation only)")
+
+# The sparsify encoder, loaded only to EMULATE delphi. Its encode subtracts b_dec itself, which is
+# precisely what convert_sae_to_sparsify.py used to double-count.
+sp_w = sp_b = sp_bdec = None
+if EMULATE:
+    from safetensors.torch import load_file as _load_pt
+    _hits = glob.glob(f"{EMULATE}/**/sae.safetensors", recursive=True)
+    if not _hits:
+        sys.exit(f"EMULATE_SPARSIFY={EMULATE!r}: no sae.safetensors under it")
+    _sp = {k: v.float().to(device) for k, v in _load_pt(_hits[0]).items()}
+    sp_w, sp_b, sp_bdec = _sp["encoder.weight"], _sp["encoder.bias"], _sp["b_dec"]
+    print(f"  EMULATE_SPARSIFY: {_hits[0]}\n"
+          f"    reproducing delphi's computation as archived. Validation only -- if the sparsify "
+          f"dir predates the 2026-08-19 converter fix, this deliberately reproduces its bugs.")
+
 
 @t.no_grad()
 def encode_rows(tok_rows):
-    """(rows, ctx_len) token ids -> (rows*ctx_len, d_sae) dense latents, delphi's `sae_dense_latents`.
+    """(rows, ctx_len) token ids -> (rows*ctx_len, d_sae) dense latents.
 
-    sae_lens' encode already returns the full-width tensor with zeros off the top-k support, which
-    is the same object delphi builds by scattering top_acts into a zero buffer.
+    Equivalent to delphi's `sae_dense_latents`: a zero buffer with the top-k values scattered in.
+    sae_lens' encode already returns exactly that shape, with zeros off the top-k support.
     """
     tok = tok_rows.to(device)
-    _, cache = model.run_with_cache(tok, names_filter=[HOOK], stop_at_layer=LAYER + 1)
-    h = cache[HOOK].reshape(-1, D_IN).float()                  # (rows*ctx, 2304)
+    if BACKEND == "hf":
+        hf_model(tok)
+        h = _grab["x"].reshape(-1, D_IN).float()
+    else:
+        _, cache = model.run_with_cache(tok, names_filter=[HOOK], stop_at_layer=LAYER + 1)
+        h = cache[HOOK].reshape(-1, D_IN).float()              # (rows*ctx, 2304)
     flat_tok = tok.reshape(-1)
-    x = (h - P[flat_tok]) / scale if MODE == "resid" else h / scale
-    return sae.encode(x), h, x
+    r = (h - P[flat_tok]) if MODE == "resid" else h
+
+    if EMULATE:
+        pre = (r - sp_bdec) @ sp_w.T + sp_b
+        vals, idx = t.topk(pre, K, dim=-1)
+        acts = t.zeros_like(pre).scatter_(-1, idx, vals)
+        return acts, h, r / scale
+    return sae.encode(r / scale), h, r / scale
 
 
 # ---- the pass ---------------------------------------------------------------------------------
