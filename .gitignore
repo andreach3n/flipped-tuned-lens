@@ -7,3 +7,5 @@ sae.pt
 # Cloned dependency, not our source code.
 dictionary_learning/
 .env
+__pycache__/
+*.pyc

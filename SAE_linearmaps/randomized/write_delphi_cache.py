@@ -397,6 +397,9 @@ print(f"  wrote {log_dir}/hookpoint_firing_counts.pt  ({alive:,}/{D_SAE:,} laten
 
 meta = {"variant": VARIANT, "init_seed": INIT_SEED, "mode": MODE, "sae": SAE_NAME,
         "arch": arch_of(ckpt), "d_sae": D_SAE, "k": K, "scale": scale, "layer": LAYER,
+        # The ablation conditions differ ONLY in these two, so a cache that does not record them
+        # is indistinguishable from its siblings once the directory name is separated from it.
+        "prepend_bos": bool(PREPEND_BOS), "emulate_sparsify": EMULATE or None,
         "hookpoint": HOOKPOINT, "n_rows": N_ROWS, "n_rows_encoded": N_PASS, "ctx_len": CTX_LEN,
         "max_latents": MAX_LATENTS, "n_firings": int(locations.shape[0]),
         "ref_cache": REF_CACHE}
