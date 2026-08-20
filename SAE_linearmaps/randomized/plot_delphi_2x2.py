@@ -118,6 +118,15 @@ fig, axes = plt.subplots(2, 2, figsize=(10.5, 8.6), dpi=200)
 W = 0.34
 handles = None
 
+# One y-scale per ROW. A1/A2 are the same measure (AUROC) under two scorers, so letting each panel
+# autoscale would make the fuzz bars LOOK the same height as the detection ones while encoding
+# larger values -- small multiples of one measure must share a scale or the comparison lies.
+ROW_PEAK = {}
+for idx in (0, 1):
+    ROW_PEAK[idx] = max(m - CHANCE + e
+                        for sc in SCORERS for sae, _ in SAE_TYPES for arm in ARMS
+                        for m, e, _ in [summary(sae, arm, sc, idx)])
+
 for row, (idx, metric) in enumerate(((0, "AUROC"), (1, "class-balanced accuracy"))):
     for col, scorer in enumerate(SCORERS):
         ax = axes[row][col]
@@ -138,9 +147,7 @@ for row, (idx, metric) in enumerate(((0, "AUROC"), (1, "class-balanced accuracy"
         # Placing them by a fraction of the autoscaled limit (the first version) drops them on top
         # of the tallest bar's value label -- the collision is invisible until the figure renders,
         # which is why the last step of the procedure is to look at the image.
-        peak = max(m - CHANCE + e
-                   for sae, _ in SAE_TYPES for arm in ARMS
-                   for m, e, _ in [summary(sae, arm, scorer, idx)])
+        peak = ROW_PEAK[idx]
         ax.set_ylim(0, peak * 1.30)
 
         # The difference of differences is the actual claim, so state each gap rather than leaving
