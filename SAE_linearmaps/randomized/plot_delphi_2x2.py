@@ -114,31 +114,43 @@ def summary(sae, arm, scorer, idx):
     return stats([r[idx] for r in D[(cell_of(sae, arm), scorer)]])
 
 
-fig, axes = plt.subplots(2, 2, figsize=(11.5, 8.4), dpi=200)
+fig, axes = plt.subplots(2, 2, figsize=(10.5, 8.6), dpi=200)
 W = 0.34
+handles = None
 
 for row, (idx, metric) in enumerate(((0, "AUROC"), (1, "class-balanced accuracy"))):
     for col, scorer in enumerate(SCORERS):
         ax = axes[row][col]
+        drawn = []
         for i, arm in enumerate(ARMS):
             xs = [j + (i - 0.5) * W for j in range(len(SAE_TYPES))]
             ms = [summary(sae, arm, scorer, idx) for sae, _ in SAE_TYPES]
-            ax.bar(xs, [m - CHANCE for m, _, _ in ms], W, yerr=[e for _, e, _ in ms],
-                   error_kw=dict(ecolor=INK, capsize=4, elinewidth=1.4), zorder=3,
-                   color=ARM_COLOUR[arm], label=ARM_LABEL[arm] if (row, col) == (0, 0) else None)
+            b = ax.bar(xs, [m - CHANCE for m, _, _ in ms], W, yerr=[e for _, e, _ in ms],
+                       error_kw=dict(ecolor=INK, capsize=4, elinewidth=1.4), zorder=3,
+                       color=ARM_COLOUR[arm], label=ARM_LABEL[arm])
+            drawn.append(b)
             for x, (m, e, _) in zip(xs, ms):
-                off = (e + 0.008) if m >= CHANCE else -(e + 0.026)
-                ax.text(x, m - CHANCE + off, f"{m:.3f}", ha="center", fontsize=8.5, color=MUTED)
+                ax.text(x, m - CHANCE + e + 0.006, f"{m:.3f}", ha="center", va="bottom",
+                        fontsize=8.5, color=MUTED)
+        handles = handles or drawn
+
+        # Reserve headroom ABOVE every bar, label and error cap, and put the gap annotations in it.
+        # Placing them by a fraction of the autoscaled limit (the first version) drops them on top
+        # of the tallest bar's value label -- the collision is invisible until the figure renders,
+        # which is why the last step of the procedure is to look at the image.
+        peak = max(m - CHANCE + e
+                   for sae, _ in SAE_TYPES for arm in ARMS
+                   for m, e, _ in [summary(sae, arm, scorer, idx)])
+        ax.set_ylim(0, peak * 1.30)
 
         # The difference of differences is the actual claim, so state each gap rather than leaving
         # it to be eyeballed off two bar tops.
-        top = ax.get_ylim()[1]
         for j, (sae, _) in enumerate(SAE_TYPES):
             (mt, et, _) = summary(sae, "trained", scorer, idx)
             (mr, er, _) = summary(sae, "rand", scorer, idx)
             d, se = mt - mr, math.sqrt(et ** 2 + er ** 2)
-            ax.text(j, top * 0.94, f"gap {d:+.3f} ± {se:.3f}\nz = {d / se:.1f}",
-                    ha="center", va="top", fontsize=8, color=INK)
+            ax.text(j, peak * 1.26, f"gap {d:+.3f} ± {se:.3f}   z = {d / se:.1f}",
+                    ha="center", va="top", fontsize=8.5, color=INK)
 
         ax.axhline(0, lw=1, color=MUTED, zorder=2)
         ax.set_xticks(range(len(SAE_TYPES)), [lab for _, lab in SAE_TYPES])
@@ -152,20 +164,24 @@ for row, (idx, metric) in enumerate(((0, "AUROC"), (1, "class-balanced accuracy"
         ax.spines["right"].set_visible(False)
         ax.tick_params(colors=MUTED, labelsize=9)
 
-axes[0][0].legend(frameon=False, fontsize=9, loc="upper right")
-
 ns = " / ".join(f"{c.split('_')[1]}-{c.split('_')[0]} {N[c]}" for c, _, _ in CELLS)
 fig.suptitle("delphi + local Llama-3.1-70B, gemma-2-2b layer 13 — plain vs skip-embed SAEs",
-             fontsize=11.5, color=INK, y=0.985)
-fig.text(0.5, 0.952, f"latents surviving min_examples=200:  {ns}", ha="center", fontsize=8.5,
+             fontsize=11.5, color=INK, y=0.995)
+fig.text(0.5, 0.963, f"latents surviving min_examples=200:  {ns}", ha="center", fontsize=8.5,
          color=MUTED)
-fig.text(0.5, 0.006,
+# A figure-level legend cannot collide with any panel's data, unlike an in-axes one.
+fig.legend(handles=[h for h in handles], labels=[ARM_LABEL[a] for a in ARMS],
+           loc="upper center", bbox_to_anchor=(0.5, 0.949), ncol=2, frameon=False, fontsize=9)
+# Wrapped by hand: a single long line forces bbox_inches="tight" to widen the whole figure, which
+# is what stretched the first render horizontally.
+fig.text(0.5, 0.005,
          "Bars show distance above chance (0.5); labels give the raw value. Error bars ±1 SE over "
-         "LATENTS, the unit delphi samples. AUROC is the exact Mann-Whitney statistic per latent. "
-         "Caches written by write_delphi_cache.py (validated to Jaccard 1.000000 against delphi's "
-         "own), bypassing the sparsify conversion; BOS prepended to match the SAEs' training regime.",
-         ha="center", fontsize=8, color=MUTED)
-fig.tight_layout(rect=(0, 0.03, 1, 0.945))
+         "LATENTS, the unit delphi samples.\nAUROC is the exact Mann-Whitney statistic per latent. "
+         "Caches written by write_delphi_cache.py — validated to Jaccard 1.000000 against delphi's "
+         "own —\nbypassing the sparsify conversion, with BOS prepended to match the SAEs' training "
+         "regime.",
+         ha="center", va="bottom", fontsize=8, color=MUTED, linespacing=1.5)
+fig.tight_layout(rect=(0, 0.055, 1, 0.925))
 
 out = os.path.join(HERE, "plots", "delphi_L13_2x2.png")
 os.makedirs(os.path.dirname(out), exist_ok=True)
