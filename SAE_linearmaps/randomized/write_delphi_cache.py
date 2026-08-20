@@ -130,9 +130,13 @@ BACKEND = os.environ.get("BACKEND", "tl").strip().lower()
 # This is a DELIBERATE divergence from delphi's own caching, and it applies to the plain SAE too:
 # the pre-2026-08-19 delphi runs fed out-of-distribution activations for the same reason.
 PREPEND_BOS = os.environ.get("PREPEND_BOS", "1").strip() not in ("", "0", "false", "no")
-if EMULATE and PREPEND_BOS:
+# Emulation defaults to BOS-off so that EMULATE_SPARSIFY alone reproduces delphi exactly. But the
+# two defects are INDEPENDENT and the ablation that attributes the false null needs all four
+# combinations, so an EXPLICIT PREPEND_BOS always wins.
+if EMULATE and PREPEND_BOS and "PREPEND_BOS" not in os.environ:
     PREPEND_BOS = False
-    print("  EMULATE_SPARSIFY set -> PREPEND_BOS forced off (emulation must match delphi exactly)")
+    print("  EMULATE_SPARSIFY set -> PREPEND_BOS defaulted off (exact delphi reproduction); "
+          "set PREPEND_BOS=1 explicitly to isolate the conversion defect on its own")
 if BACKEND not in ("tl", "hf"):
     sys.exit(f"BACKEND={BACKEND!r} -- use 'tl' (default, matches how the SAEs were trained) or 'hf'")
 if BACKEND == "hf" and MODE == "resid":
