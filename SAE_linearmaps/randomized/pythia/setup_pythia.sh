@@ -52,6 +52,21 @@ if not ok:
           file=sys.stderr)
     sys.exit(1)
 
+# THE GATE THAT MATTERS MOST, because everything above it can pass while this fails.
+# transformers 5.x requires torch >= 2.5; the RunPod image ships 2.4.1+cu124. On that pairing
+# transformers DISABLES ITS TORCH BACKEND at import and every AutoModel call dies with
+# "requires the PyTorch library but it was not found" -- while torch itself is fine and
+# cuda.is_available() is True. Checking torch alone does not catch it; ask transformers.
+from transformers.utils import is_torch_available
+import transformers
+if not is_torch_available():
+    print(f"\n!! transformers {transformers.__version__} cannot see torch {torch.__version__}.\n"
+          "   transformers 5.x needs torch >= 2.5; this image has an older torch. Pin it back\n"
+          "   rather than upgrading torch (which risks CUDA against the host driver):\n"
+          "        pip install 'transformers==4.56.1'\n", file=sys.stderr)
+    sys.exit(1)
+print(f"transformers {transformers.__version__} sees torch OK")
+
 # Confirm we got EleutherAI's sparsify and not Neural Magic's deprecated PyPI package of the
 # same import name. `pip install sparsify` installs the WRONG one and fails much later with a
 # confusing error, so check for the class we actually use.

@@ -152,8 +152,11 @@ if __name__ == "__main__":
         sys.exit(f"VARIANT=trained has nothing to materialize -- point sparsify/delphi at {MODEL_NAME}.")
 
     from transformers import AutoTokenizer
-    os.makedirs(OUT_DIR, exist_ok=True)
+    # Build BEFORE creating the directory: a failed build used to leave an empty OUT_DIR behind,
+    # which makes the next step's error message about the wrong thing (hf_push.py then reports
+    # "not a model checkpoint" rather than "the directory does not exist").
     model = build_model()
+    os.makedirs(OUT_DIR, exist_ok=True)
     model.save_pretrained(OUT_DIR)
     # delphi resolves the tokenizer from the model directory, so it has to be there. Pythia's
     # tokenizer is identical across arms -- we never touch it, only the weights.

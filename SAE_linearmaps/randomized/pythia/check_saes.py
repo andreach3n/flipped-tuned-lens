@@ -56,7 +56,10 @@ d_sae, k = sae.num_latents, sae.cfg.k
 print(f"  d_sae={d_sae} k={k} activation={sae.cfg.activation} "
       f"normalize_decoder={sae.cfg.normalize_decoder}")
 
-model = AutoModel.from_pretrained(model_path, dtype=t.bfloat16).to(device).eval()
+# `torch_dtype=`, not `dtype=`: the latter only exists from transformers 4.57, and we pin
+# 4.56.1 so that the image's torch 2.4.1 stays usable. Keep this consistent with
+# randomize_pythia.py or the two will disagree about precision on different versions.
+model = AutoModel.from_pretrained(model_path, torch_dtype=t.bfloat16).to(device).eval()
 tok = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 ds = load_dataset(DATASET, split=SPLIT).shuffle(seed=7)

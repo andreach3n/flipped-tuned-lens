@@ -12,7 +12,18 @@ eai-sparsify==1.3.3
 
 # torch is deliberately NOT listed -- it comes from the base image. eai-sparsify declares an
 # unpinned `torch`, which any existing version satisfies, so pip will leave the image's alone.
-transformers
+
+# TRANSFORMERS MUST BE PINNED, and this is the second half of the same trap.
+# Leaving it unpinned installs transformers 5.x, which requires torch >= 2.5. The RunPod
+# PyTorch image ships torch 2.4.1+cu124, so transformers SILENTLY DISABLES ITS TORCH BACKEND --
+# it prints "Disabling PyTorch because PyTorch >= 2.5 is required but found 2.4.1" and then
+# every AutoModel call dies with "requires the PyTorch library but it was not found", while
+# `import torch; torch.cuda.is_available()` is perfectly True. Observed on a fresh pod.
+# 4.56.1 needs only torch >= 2.2, so it runs on the image's torch untouched -- which is the
+# whole point, since upgrading torch is what breaks CUDA against the host driver.
+# It is ALSO delphi's pinned version (see ../DELPHI_SETUP.md), so the training env and the
+# delphi env agree on `named_parameters()` ordering -- and that ordering IS the random draw.
+transformers==4.56.1
 datasets
 huggingface-hub
 matplotlib
