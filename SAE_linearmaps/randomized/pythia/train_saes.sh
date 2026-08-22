@@ -53,6 +53,18 @@ MICRO_ACC_STEPS=${MICRO_ACC_STEPS:-8}
 MAX_EXAMPLES=${MAX_EXAMPLES:-48832}          # 48832 * 2048 = 99,991,552 tokens ~ 100M
 WARMUP=${WARMUP:-76}                         # ~5% of 48832/32 = 1526 steps
 AUXK=${AUXK:-0.0}                            # sparsify default. See the dead-latent note below.
+
+# OPTIMIZER MUST BE SET EXPLICITLY. eai-sparsify 1.3.3 defaults `optimizer` to **signum**
+# (sign-SGD), not adam -- verified on the installed package, and it differs from the GitHub main
+# branch, which defaults to adam. Three things follow silently if you leave it unset:
+#   1. you train with sign-SGD, not Adam, which is not what Gao et al. / the paper's era used;
+#   2. the LR rule becomes 5e-3/sqrt(d_sae/2^14) = 1.77e-3 here, 25x adam's 2e-4/sqrt(...) rule;
+#   3. the signum branch sets `lr_schedulers = []`, so --lr_warmup_steps IS SILENTLY IGNORED.
+# None of that errors. Pin it.
+OPTIMIZER=${OPTIMIZER:-adam}
+# LR unset -> sparsify's auto rule for the chosen optimizer (adam: 2e-4/sqrt(131072/2^14)
+# = 7.07e-5). Set it to sweep; the value is tagged into RUN_NAME so runs cannot overwrite.
+LR=${LR:-}
 DATASET=${DATASET:-Skylion007/openwebtext}
 SPLIT=${SPLIT:-train[:3%]}                   # ~235M tokens; enough for 100M with margin, and
                                              # small enough that chunk_and_tokenize is minutes.
@@ -82,9 +94,17 @@ else
   echo "ARM must be 'trained' or 'rand'" >&2; exit 1
 fi
 
-RUN_NAME=${RUN_NAME:-pythia1b_${ARM}_L${LAYER}_R${R}_k${K}_100M}
+# LR goes in the name so a sweep cannot overwrite itself, and so the SAE_DIR you hand to
+# check_saes.py / delphi says which point of the sweep it is.
+LR_TAG=""
+EXTRA=()
+if [ -n "$LR" ]; then
+  LR_TAG="_lr${LR}"
+  EXTRA+=(--lr "$LR")
+fi
+RUN_NAME=${RUN_NAME:-pythia1b_${ARM}_L${LAYER}_R${R}_k${K}_100M_${OPTIMIZER}${LR_TAG}}
 LOG_DIR=${LOG_DIR:-/dev/shm/logs}
-LOG="$LOG_DIR/train_${ARM}_L${LAYER}.log"
+LOG="$LOG_DIR/train_${ARM}_L${LAYER}_${OPTIMIZER}${LR_TAG}.log"
 mkdir -p "$LOG_DIR"
 
 # WANDB. sparsify logs by default (log_to_wandb=True) and reads WANDB_ENTITY/WANDB_PROJECT from
@@ -112,6 +132,8 @@ python -m sparsify "$MODEL" "$DATASET" \
   --batch_size "$BATCH" \
   --micro_acc_steps "$MICRO_ACC_STEPS" \
   --max_examples "$MAX_EXAMPLES" \
+  --optimizer "$OPTIMIZER" \
+  ${EXTRA[@]+"${EXTRA[@]}"} \
   --lr_warmup_steps "$WARMUP" \
   --auxk_alpha "$AUXK" \
   --save_every 500 \

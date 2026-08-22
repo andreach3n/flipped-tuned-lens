@@ -44,7 +44,17 @@ class is structurally absent from this pipeline.
    then decay linearly to zero. The paper states no warmup. 76 is ~5% of steps. Rationale: do
    not hand the *"the random arm was just undertrained"* objection a free win — it already cost
    this project a full re-run cycle on Gemma, and was ruled out there empirically.
-3. **500 latents, not 100.** `--max_latents N` is `torch.arange(N)` — the FIRST N latent
+3. **`--optimizer adam`, set explicitly — and this one is a trap, not a preference.**
+   `eai-sparsify==1.3.3` (the PyPI release) defaults `optimizer` to **`signum`**, not `adam`.
+   The GitHub main branch defaults to `adam`, which is what the docs and most readers assume.
+   Leaving it unset silently gets you three things at once: sign-SGD instead of Adam; the LR
+   rule `5e-3/sqrt(d_sae/2^14)` = **1.77e-3** instead of Adam's `2e-4/sqrt(...)` = **7.07e-5**,
+   a 25× difference; and — because the signum branch sets `lr_schedulers = []` — **`--lr_warmup_steps`
+   is ignored entirely**, so deviation 2 above becomes a no-op. Observed live on a real run; none
+   of it errors. `train_saes.sh` now pins `--optimizer` and tags it into the run name.
+4. **LR chosen by sweep, not by the library default.** See below — the default is version-
+   dependent and therefore not a stable thing to inherit.
+5. **500 latents, not 100.** `--max_latents N` is `torch.arange(N)` — the FIRST N latent
    indices, not the top-firing N. Since SAE latent indices are exchangeable, that *is* a random
    sample of the dictionary, and it is a superset of the paper's n. 100 latents gave standard
    errors wide enough to produce a false "no gap" read on Gemma (n=35/23), which is the specific
