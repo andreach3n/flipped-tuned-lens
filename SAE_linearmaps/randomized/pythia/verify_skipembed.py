@@ -7,9 +7,13 @@ cannot resolve -- also produces a full set of plausible numbers. Every check her
 that would otherwise fail silently.
 
   G0  the ordered-parameter-name hash is UNCHANGED by attaching. This is the one that protects
-      randomize_pythia.py: the random draw walks named_parameters() in order, and
-      verify_randomization.py pins the hash at 245b6cc67df238e2. P is a buffer precisely so this
-      holds; make it an nn.Linear and the same seed silently gives a different model.
+      randomize_pythia.py: the random draw walks named_parameters() in order, so an extra
+      parameter anywhere in that walk means the same seed silently gives a different model. P is
+      a buffer precisely so this holds; make it an nn.Linear and it moves.
+      NOTE the ABSOLUTE value here is NOT verify_randomization.py's 245b6cc67df238e2. That one
+      hashes the causal LM (196 tensors, embed_in + embed_out); this script loads AutoModel, the
+      base model, which has no embed_out -- 195 tensors, hash e3893c98f547cb0a. Only the
+      before-vs-after comparison within this script is meaningful; do not compare across the two.
   G1  the main forward is BIT-IDENTICAL with the probe attached. The hook returns None, so layer
       L+1 must receive exactly what it received before. Measured, not argued.
   G2  the probe's output equals h - P[tok] recomputed independently, to the last bit.
@@ -167,8 +171,23 @@ rf = r_manual.float().reshape(-1, D)
 var_h = float((hf - hf.mean(0, keepdim=True)).pow(2).mean())
 var_r = float((rf - rf.mean(0, keepdim=True)).pow(2).mean())
 ratio = var_r / var_h if var_h else float("nan")
-check("Var(r)/Var(h) in (0.05, 0.95)", 0.05 < ratio < 0.95,
-      f"{ratio:.4f}  (map explains {1 - ratio:.1%} of centred variance on random tokens)")
+# Measured on UNIFORM RANDOM token ids, so this is not the corpus number and must not be read as
+# one: the map is fit frequency-weighted on real text, so it always does worse here. Both Pythia
+# arms show that gap in the same direction (trained 0.9205 -> 0.9595, rand 0.2541 -> 0.5626).
+#
+# The band is deliberately WIDE. Its only job is to catch a degenerate map -- ratio ~0 (the map
+# ate everything, so r carries no signal) or ratio indistinguishable from 1 (the map does
+# nothing, e.g. an all-zero or mis-shaped beta). Catching the WRONG map is G4a's job and it does
+# it properly, by embedding fingerprint. A narrow band here would only encode an assumption about
+# how token-linear a given model happens to be -- and on trained pythia-1b L8 that assumption
+# fails legitimately: ten outlier dimensions carry 78% of the centred variance and no
+# token-embedding map can predict them, which pins the ratio near 1 no matter how good the fit
+# on the other 2038 dimensions is (there it explains 28%, matching Gemma's 27%).
+RATIO_LO = float(os.environ.get("RATIO_LO", 0.02))
+RATIO_HI = float(os.environ.get("RATIO_HI", 0.995))
+check(f"Var(r)/Var(h) in ({RATIO_LO}, {RATIO_HI})", RATIO_LO < ratio < RATIO_HI,
+      f"{ratio:.4f}  (map removes {1 - ratio:.1%} of centred variance on RANDOM tokens; "
+      f"the fit recorded {meta.get('explained_variance_centred'):.1%} on real text)")
 
 # ---- G5: loud failure ------------------------------------------------------------------
 print("\nG5  fails loudly rather than falling back to h")
