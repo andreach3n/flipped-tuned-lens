@@ -45,10 +45,15 @@ from skipembed import embed_fingerprint         # noqa: E402
 ARM        = os.environ.get("ARM", "trained")
 RAND_MODEL = os.environ.get("RAND_MODEL", "/dev/shm/pythia1b_rand_s0")
 DATASET    = os.environ.get("DATASET", "Skylion007/openwebtext")
-# The SAME slice train_saes.sh trains on. The map is model-side preprocessing, not a held-out
-# estimate, so fitting it on the training distribution is the correct choice -- and it keeps the
-# map from being fit on a distribution the SAE never sees.
-SPLIT      = os.environ.get("SPLIT", "train[:3%]")
+# The map is model-side preprocessing, not a held-out estimate, so fitting it on the TRAINING
+# distribution is the correct choice -- it must not be fit on data the SAE never sees.
+#
+# Plain "train", not train_saes.sh's "train[:3%]", because `datasets` rejects slice syntax when
+# streaming ("Bad split: train[:3%]"). That costs nothing here: a streamed split is read in ROW
+# ORDER from the start, and 20M tokens is roughly 40k documents against openwebtext's ~8M, so
+# this stays deep inside the first 3% that the SAE trains on. Passing a sliced split still works
+# -- it just falls back to a non-streaming load, which materialises the whole slice first.
+SPLIT      = os.environ.get("SPLIT", "train")
 MAP_TOKENS = int(os.environ.get("MAP_TOKENS", 20_000_000))   # matches the Gemma precedent
 RIDGE      = float(os.environ.get("RIDGE", 1e-2))            # tiny L2, for a stable solve only
 CTX        = int(os.environ.get("CTX", 2048))
@@ -92,7 +97,9 @@ Bmat = t.zeros(D + 1, D,     dtype=t.float64, device=device)
 S_hh = 0.0
 seen = 0
 
-ds = load_dataset(DATASET, split=SPLIT, streaming=True)
+STREAMING = "[" not in SPLIT          # slices force a full (non-streaming) load; see SPLIT above
+print(f"  corpus {DATASET} [{SPLIT}] streaming={STREAMING}, target {MAP_TOKENS:,} tokens")
+ds = load_dataset(DATASET, split=SPLIT, streaming=STREAMING)
 buf: list[int] = []
 with t.no_grad():
     rows: list[list[int]] = []
