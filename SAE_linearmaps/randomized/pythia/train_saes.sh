@@ -41,9 +41,18 @@
 #
 #   CUDA_VISIBLE_DEVICES=0 ARM=trained bash train_saes.sh
 #   CUDA_VISIBLE_DEVICES=1 ARM=rand RAND_MODEL=/dev/shm/pythia1b_rand_s0 bash train_saes.sh
+#
+# MODE=resid trains a SKIP-EMBED SAE on r = h - P[tok] instead of h. It does NOT patch sparsify:
+# skipembed.py attaches a child module to layer L whose output is r, so `layers.L.skipembed` is a
+# real hookpoint and stock sparsify autoencodes it. Requires a map fit for THIS ARM first
+# (fit_map_pythia.py), and the probe gate (verify_skipembed.py) runs before training either way.
+#
+#   ARM=trained MODE=resid MAP=/dev/shm/maps/P_pythia1b_L8_trained.pt bash train_saes.sh
 set -euo pipefail
 
 ARM=${ARM:-trained}
+MODE=${MODE:-full}                           # full | resid
+MAP=${MAP:-}
 LAYER=${LAYER:-8}
 K=${K:-32}
 R=${R:-64}
@@ -102,9 +111,35 @@ if [ -n "$LR" ]; then
   LR_TAG="_lr${LR}"
   EXTRA+=(--lr "$LR")
 fi
-RUN_NAME=${RUN_NAME:-pythia1b_${ARM}_L${LAYER}_R${R}_k${K}_100M_${OPTIMIZER}${LR_TAG}}
+
+# MODE decides the hookpoint, the launcher and the run name. The name carries the mode so a resid
+# run can never land on top of a full run in $SAVE_DIR or on the Hub.
+HERE_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ "$MODE" = "resid" ]; then
+  if [ -z "$MAP" ]; then
+    echo "MODE=resid needs MAP=<path>. Run: ARM=$ARM bash -c 'python -u $HERE_DIR/fit_map_pythia.py'" >&2
+    exit 1
+  fi
+  HOOKPOINT="layers.${LAYER}.skipembed"
+  LAUNCHER=("python" "-u" "$HERE_DIR/train_skipembed.py")
+  MODE_TAG="_resid"
+  # THE PROBE GATE. Same rule as the randomization gate above: never train on a mechanism that
+  # has not been verified on THIS box, for THIS arm. A probe that is attached but wrong trains
+  # perfectly happily and produces a complete, plausible, wrong cell.
+  echo ">>> verifying the skip-embed probe before training on it"
+  ARM="$ARM" RAND_MODEL="$RAND_MODEL" MAP="$MAP" python -u "$HERE_DIR/verify_skipembed.py" || {
+    echo "SKIP-EMBED GATE FAILED -- refusing to train" >&2; exit 1; }
+elif [ "$MODE" = "full" ]; then
+  HOOKPOINT="layers.${LAYER}"
+  LAUNCHER=("python" "-m" "sparsify")
+  MODE_TAG=""
+else
+  echo "MODE must be 'full' or 'resid'" >&2; exit 1
+fi
+
+RUN_NAME=${RUN_NAME:-pythia1b_${ARM}${MODE_TAG}_L${LAYER}_R${R}_k${K}_100M_${OPTIMIZER}${LR_TAG}}
 LOG_DIR=${LOG_DIR:-/dev/shm/logs}
-LOG="$LOG_DIR/train_${ARM}_L${LAYER}_${OPTIMIZER}${LR_TAG}.log"
+LOG="$LOG_DIR/train_${ARM}${MODE_TAG}_L${LAYER}_${OPTIMIZER}${LR_TAG}.log"
 mkdir -p "$LOG_DIR"
 
 # WANDB. sparsify logs by default (log_to_wandb=True) and reads WANDB_ENTITY/WANDB_PROJECT from
@@ -119,13 +154,13 @@ if [ -z "${WANDB_API_KEY:-}" ] && [ -z "${WANDB_MODE:-}" ] && [ ! -f "$HOME/.net
 fi
 echo ">>> wandb project=$WANDB_PROJECT run=$RUN_NAME mode=${WANDB_MODE:-online}"
 
-echo ">>> ARM=$ARM MODEL=$MODEL -> $SAVE_DIR/$RUN_NAME"
-echo ">>> d_sae = $R * 2048 = $((R * 2048)), k=$K, $((MAX_EXAMPLES * CTX)) tokens"
+echo ">>> ARM=$ARM MODE=$MODE MODEL=$MODEL -> $SAVE_DIR/$RUN_NAME"
+echo ">>> hookpoint=$HOOKPOINT  d_sae = $R * 2048 = $((R * 2048)), k=$K, $((MAX_EXAMPLES * CTX)) tokens"
 echo ">>> log -> $LOG"
 
-python -m sparsify "$MODEL" "$DATASET" \
+MAP="$MAP" "${LAUNCHER[@]}" "$MODEL" "$DATASET" \
   --split "$SPLIT" \
-  --hookpoints "layers.$LAYER" \
+  --hookpoints "$HOOKPOINT" \
   --expansion_factor "$R" \
   --k "$K" \
   --ctx_len "$CTX" \
@@ -145,18 +180,29 @@ python -m sparsify "$MODEL" "$DATASET" \
 # /dev/shm is RAM and / is rebuilt from the image; a pod stop destroys both. Anything not on
 # the Hub is gone. PATH_IN_REPO is what keeps the two arms from overwriting each other.
 if [ -n "${HF_REPO:-}" ]; then
-  HERE_DIR="$(dirname "$0")"
   LOCAL="$SAVE_DIR/$RUN_NAME" HF_REPO="$HF_REPO" PATH_IN_REPO="saes/$RUN_NAME" \
     python -u "$HERE_DIR/hf_push.py"
   LOCAL="$LOG_DIR" HF_REPO="$HF_REPO" PATH_IN_REPO="logs" \
     python -u "$HERE_DIR/hf_push.py"
+  # THE MAP IS PART OF THE EXPERIMENT, NOT SCAFFOLDING. Without the exact beta this checkpoint
+  # was trained against, its encoder input cannot be reproduced and the SAE is uninterpretable.
+  if [ "$MODE" = "resid" ]; then
+    LOCAL="$(dirname "$MAP")" HF_REPO="$HF_REPO" PATH_IN_REPO="maps" \
+      python -u "$HERE_DIR/hf_push.py"
+  fi
 else
   echo ">>> HF_REPO unset -- checkpoint left only at $SAVE_DIR/$RUN_NAME (LOST ON POD STOP)."
 fi
 
 echo
 echo ">>> trained. NOW RUN THE SAE HEALTH GATE before spending judge time:"
-echo "    SAE_DIR=$SAVE_DIR/$RUN_NAME ARM=$ARM python -u $(dirname "$0")/check_saes.py"
+if [ "$MODE" = "resid" ]; then
+  echo "    SAE_DIR=$SAVE_DIR/$RUN_NAME ARM=$ARM MODE=resid MAP=$MAP \\"
+  echo "      python -u $HERE_DIR/check_saes.py"
+  echo "    (and re-run verify_skipembed.py with SAE_DIR set, to enable check G6)"
+else
+  echo "    SAE_DIR=$SAVE_DIR/$RUN_NAME ARM=$ARM python -u $HERE_DIR/check_saes.py"
+fi
 echo
 echo ">>> DEAD LATENTS ARE THE RISK HERE. auxk_alpha defaults to 0 in sparsify, so nothing"
 echo "    revives dead latents, and 131072 latents in ~1526 steps is a cold start. delphi only"
