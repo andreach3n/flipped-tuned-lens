@@ -46,9 +46,37 @@ if not any(PROBE_NAME in a for a in sys.argv[1:]):
         f"a complete and plausible wrong cell."
     )
 
+import torch as t                              # noqa: E402
 import transformers                            # noqa: E402
+from sparsify import SparseCoder               # noqa: E402
 
 _attached = 0
+
+# ---- THE PARAMETERLESS-HOOKPOINT FIX ---------------------------------------------------
+# sparsify's SparseCoder.load_from_disk defaults to device="cpu". delphi infers the device to
+# pass it from the hooked module, and for a normal hookpoint (`layers.8`, a transformer block)
+# that finds parameters on the GPU. Our probe is PARAMETERLESS on purpose -- P is a buffer so the
+# named_parameters() walk that randomize_pythia.py depends on stays untouched -- so that inference
+# falls through to the CPU default and caching dies with
+#     RuntimeError: Expected all tensors to be on the same device, ... cuda:0 and cpu
+# inside SparseCoder.encode's `x - self.b_dec`.
+#
+# Forcing the device here rather than giving the probe a dummy parameter, because a parameter
+# would move the ordered-name hash and silently change which model a given seed produces --
+# a far worse trade than one wrapped loader. load_many() routes through load_from_disk, so this
+# single patch covers both entry points. When delphi passes a real device we leave it alone.
+SAE_DEVICE = os.environ.get("SAE_DEVICE") or ("cuda" if t.cuda.is_available() else "cpu")
+_orig_load_from_disk = SparseCoder.load_from_disk
+
+
+def _load_from_disk(path, device="cpu", **kwargs):
+    if str(device) == "cpu" and SAE_DEVICE != "cpu":
+        print(f"[delphi_skipembed] SparseCoder would have loaded on cpu -> forcing {SAE_DEVICE}")
+        device = SAE_DEVICE
+    return _orig_load_from_disk(path, device=device, **kwargs)
+
+
+SparseCoder.load_from_disk = staticmethod(_load_from_disk)
 
 
 def _wrap(cls):
