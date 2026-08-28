@@ -46,6 +46,8 @@ ROOT     = os.environ.get("RESULTS_DIR", "/dev/shm/delphi_run/results")
 LAYER    = int(os.environ.get("LAYER", 8))
 LR       = os.environ.get("LR", "1e-3")
 CELL_FMT = os.environ.get("CELL_FMT", "pythia1b_{arm}_L{layer}_lr{lr}")
+# Skip-embed cells hook `layers.8.skipembed`; only the shard fallback in firing_counts() uses it.
+HOOKPOINT = os.environ.get("HOOKPOINT", f"layers.{LAYER}")
 SCORERS  = os.environ.get("SCORERS", "detection,fuzz").split(",")
 MIN_PER_BIN = int(os.environ.get("MIN_PER_BIN", 5))
 # Log-spaced (doubling) bins: firing counts span 200 to ~650,000, so linear bins would put
@@ -82,10 +84,21 @@ def per_latent_auroc(cell, scorer):
 
 
 def firing_counts(cell):
+    """Prefers delphi's log/hookpoint_firing_counts.pt -- full dictionary, sub-MB, and it
+    survives the `--exclude <cell>/latents` used when archiving. Shard bincount is the fallback.
+    """
+    p = f"{ROOT}/{cell}/log/hookpoint_firing_counts.pt"
+    if os.path.exists(p):
+        import torch as t
+        obj = t.load(p, weights_only=True, map_location="cpu")
+        v = list(obj.values())[0] if isinstance(obj, dict) else obj
+        return {i: int(c) for i, c in enumerate(v.tolist()) if c > 0}
+
     counts = {}
-    shards = sorted(glob.glob(f"{ROOT}/{cell}/latents/layers.{LAYER}/*.safetensors"))
+    shards = sorted(glob.glob(f"{ROOT}/{cell}/latents/{HOOKPOINT}/*.safetensors"))
     if not shards:
-        raise SystemExit(f"no cache shards for {cell} -- latents dir missing")
+        raise SystemExit(f"no firing counts for {cell}: neither {p} nor a latents/{HOOKPOINT} "
+                         f"cache. Set HOOKPOINT if it is not layers.{LAYER}.")
     for s in shards:
         start = int(os.path.basename(s).split("_")[0])
         idx = load_file(s)["locations"][:, 2].astype(np.int64) + start

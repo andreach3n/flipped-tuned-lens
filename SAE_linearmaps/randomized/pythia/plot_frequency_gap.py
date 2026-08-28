@@ -38,8 +38,23 @@ LAYER    = int(os.environ.get("LAYER", 8))
 LRS      = os.environ.get("LRS", "1e-3,2e-3").split(",")
 SCORER   = os.environ.get("SCORER", "fuzz")
 CELL_FMT = os.environ.get("CELL_FMT", "pythia1b_{arm}_L{layer}_lr{lr}")
+# The skip-embed run hooks `layers.8.skipembed`, not `layers.8`, so the cache path is not
+# derivable from LAYER alone. Only used by the shard fallback in firing_counts().
+HOOKPOINT = os.environ.get("HOOKPOINT", f"layers.{LAYER}")
+TAG      = os.environ.get("TAG", "")             # appended to the output filename
 MIN_PER_BIN = int(os.environ.get("MIN_PER_BIN", 5))
 EDGES = [0, 400, 800, 1600, 3200, 6400, 12800, 25600, 51200, float("inf")]
+
+TITLE = os.environ.get(
+    "TITLE", "Auto-interp separates trained from random only among FREQUENT latents")
+SUBTITLE = os.environ.get(
+    "SUBTITLE",
+    f"pythia-1b layer {LAYER} · delphi + Llama-3.1-70B · per-latent AUROC, ±1 SE over latents")
+FOOTNOTE = os.environ.get(
+    "FOOTNOTE",
+    "The aggregate gap is a mixture over this curve, so it inherits the dictionary's frequency "
+    "profile: naive mean AUROC gives −0.183 (z=−17)\nat LR 1e-3 and +0.015 (z=1.2) at 2e-3 — "
+    "opposite conclusions from the same models. The curve itself is stable across both.")
 
 # Okabe-Ito, validated for this use: adjacent-pair CVD separation dE 29.2 (protan) / 30.9
 # (tritan), normal-vision 36.2 -- all far above the 8 floor. The low-contrast warning on the
@@ -69,8 +84,31 @@ def per_latent_auroc(cell):
 
 
 def firing_counts(cell):
+    """Per-latent firing count on the scoring corpus.
+
+    PREFERS delphi's own `log/hookpoint_firing_counts.pt`. That file covers the FULL dictionary
+    regardless of --max_latents, weighs a few hundred KB against the cache's 14 GB, and -- the
+    part that matters operationally -- it survives the `--exclude <cell>/latents` we archive
+    with, so this analysis still runs after the pod is gone. Bincounting the shards is kept as a
+    fallback for older result dirs; the two agree, since delphi accumulates that file from the
+    same firings it writes into the cache.
+    """
+    p = f"{ROOT}/{cell}/log/hookpoint_firing_counts.pt"
+    if os.path.exists(p):
+        import torch as t
+        obj = t.load(p, weights_only=True, map_location="cpu")
+        v = list(obj.values())[0] if isinstance(obj, dict) else obj
+        return {i: int(c) for i, c in enumerate(v.tolist()) if c > 0}
+
+    shards = sorted(glob.glob(f"{ROOT}/{cell}/latents/{HOOKPOINT}/*.safetensors"))
+    if not shards:
+        raise SystemExit(
+            f"no firing counts for {cell}: neither {p} nor "
+            f"{ROOT}/{cell}/latents/{HOOKPOINT}/*.safetensors. If the archive excluded latents/, "
+            f"the log file is the only source -- set HOOKPOINT if the hookpoint is not "
+            f"layers.{LAYER}.")
     counts = {}
-    for s in sorted(glob.glob(f"{ROOT}/{cell}/latents/layers.{LAYER}/*.safetensors")):
+    for s in shards:
         start = int(os.path.basename(s).split("_")[0])
         idx = load_file(s)["locations"][:, 2].astype(np.int64) + start
         for lid, c in zip(*np.unique(idx, return_counts=True)):
@@ -135,8 +173,11 @@ for lr, colour in zip(LRS, (BLUE, ORANGE)):
     ax.errorbar(xs, ys, yerr=es, marker="o", ms=7, lw=2.2, capsize=4, color=colour,
                 ecolor=colour, elinewidth=1.3, label=f"LR {lr}", zorder=5)
 
-ax.set_xticks(range(len(used)), [label(EDGES[bi], EDGES[bi + 1]) for bi in used], fontsize=9)
-ax.set_xlabel("latent firing count on the scoring corpus (30M tokens)", fontsize=10)
+# Rotated: at nine bins the "12.8k–25.6k" / "25.6k–51.2k" labels collide horizontally. Rotation
+# with right-alignment keeps each label anchored under its own tick.
+ax.set_xticks(range(len(used)), [label(EDGES[bi], EDGES[bi + 1]) for bi in used],
+              fontsize=9, rotation=30, ha="right")
+ax.set_xlabel("latent firing count on the scoring corpus (30M tokens)", fontsize=10, labelpad=8)
 ax.set_ylabel(f"{SCORER} AUROC gap  (trained − randomized)", fontsize=10)
 # Scale to the DATA, then shade the positive half. Shading before setting limits would drag
 # the axis to the top of the span and squash the series into a corner.
@@ -150,9 +191,7 @@ ax.text(0.985, 0.96, "trained more interpretable", transform=ax.transAxes,
         fontsize=9, color=MUTED, va="top", ha="right")
 ax.text(0.985, 0.04, "randomized more interpretable", transform=ax.transAxes,
         fontsize=9, color=MUTED, va="bottom", ha="right")
-ax.set_title("Auto-interp separates trained from random only among FREQUENT latents\n"
-             "pythia-1b layer 8 · delphi + Llama-3.1-70B · per-latent AUROC, ±1 SE over latents",
-             fontsize=10.5, loc="left", color=INK)
+ax.set_title(f"{TITLE}\n{SUBTITLE}", fontsize=10.5, loc="left", color=INK)
 ax.legend(frameon=False, fontsize=9.5, loc="upper left")
 ax.grid(axis="y", color=GRID, lw=0.6, zorder=1)
 ax.set_axisbelow(True)
@@ -160,15 +199,12 @@ for sp in ("top", "right"):
     ax.spines[sp].set_visible(False)
 ax.tick_params(colors=MUTED, labelsize=9)
 
-fig.text(0.5, -0.02,
-         "The aggregate gap is a mixture over this curve, so it inherits the dictionary's "
-         "frequency profile: naive mean AUROC gives −0.183 (z=−17)\nat LR 1e-3 and +0.015 "
-         "(z=1.2) at 2e-3 — opposite conclusions from the same models. The curve itself is "
-         "stable across both.",
-         ha="center", fontsize=8, color=MUTED)
+# -0.20, not -0.02: the rotated tick labels plus the axis label occupy roughly a fifth of the
+# figure height below the axes, and a footnote at -0.02 lands on top of them.
+fig.text(0.5, -0.20, FOOTNOTE, ha="center", fontsize=8, color=MUTED)
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plots",
-                   f"pythia1b_L{LAYER}_freq_gap_{SCORER}.png")
+                   f"pythia1b_L{LAYER}{TAG}_freq_gap_{SCORER}.png")
 os.makedirs(os.path.dirname(out), exist_ok=True)
 fig.savefig(out, bbox_inches="tight")
 print(f"\nsaved {out}")

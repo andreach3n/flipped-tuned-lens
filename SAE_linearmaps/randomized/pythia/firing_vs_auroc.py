@@ -44,6 +44,7 @@ from safetensors.numpy import load_file
 ROOT    = os.environ.get("RESULTS_DIR", "/dev/shm/delphi_run/results")
 CELL    = os.environ.get("CELL", "pythia1b_trained_L8_lr1e-3")
 LAYER   = int(os.environ.get("LAYER", 8))
+HOOKPOINT = os.environ.get("HOOKPOINT", f"layers.{LAYER}")   # skip-embed: layers.8.skipembed
 TOP_N   = int(os.environ.get("TOP_N", 192))
 TARGET  = float(os.environ.get("TARGET", 0)) or None   # the other cell's AUROC, for context
 SCORERS = os.environ.get("SCORERS", "detection,fuzz").split(",")
@@ -83,12 +84,24 @@ def per_latent_auroc(scorer):
 
 
 def firing_counts():
-    """Per-latent firing count from every cache shard. locations[:, 2] is latent MINUS start."""
+    """Per-latent firing count.
+
+    Prefers delphi's log/hookpoint_firing_counts.pt: full dictionary, sub-MB, and present even
+    when the archive excluded the 14 GB latents/ tree. Falls back to bincounting the shards,
+    where locations[:, 2] is the latent index MINUS the shard's start.
+    """
+    p = f"{ROOT}/{CELL}/log/hookpoint_firing_counts.pt"
+    if os.path.exists(p):
+        import torch as t
+        obj = t.load(p, weights_only=True, map_location="cpu")
+        v = list(obj.values())[0] if isinstance(obj, dict) else obj
+        return {i: int(c) for i, c in enumerate(v.tolist()) if c > 0}
+
     counts = {}
-    shards = sorted(glob.glob(f"{ROOT}/{CELL}/latents/layers.{LAYER}/*.safetensors"))
+    shards = sorted(glob.glob(f"{ROOT}/{CELL}/latents/{HOOKPOINT}/*.safetensors"))
     if not shards:
-        raise SystemExit(f"no cache shards under {ROOT}/{CELL}/latents/layers.{LAYER} -- "
-                         "the latents dir may have been excluded from the archive")
+        raise SystemExit(f"no firing counts for {CELL}: neither {p} nor a latents/{HOOKPOINT} "
+                         f"cache. Set HOOKPOINT if it is not layers.{LAYER}.")
     for s in shards:
         start = int(os.path.basename(s).split("_")[0])
         loc = load_file(s)["locations"]

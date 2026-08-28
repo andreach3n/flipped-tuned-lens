@@ -199,8 +199,13 @@ ns = "/".join(str(stats([r[0] for r in D[(LRS[0], a, "detection")]])[2]) for a, 
 handles = draw(axA, 0, "AUROC above chance", f"A  AUROC — bias-free (n = {ns} latents at LR {LRS[0]})")
 draw(axB, 1, "balanced accuracy above chance", "B  the same latents, class-balanced accuracy")
 
-fig.suptitle(f"delphi + Llama-3.1-70B on pythia-1b layer {LAYER} — trained vs re-randomized",
-             fontsize=11, color=INK, y=0.995)
+# SAE_LABEL is not decoration. The plain and skip-embed runs produce structurally identical
+# figures, so an unlabelled one cannot be told from the other once it is in a slide deck or a
+# writeup -- and they support opposite-sounding claims. TAG keeps the files apart on disk for
+# the same reason.
+SAE_LABEL = os.environ.get("SAE_LABEL", "plain top-k SAE")
+fig.suptitle(f"{SAE_LABEL} · delphi + Llama-3.1-70B on pythia-1b layer {LAYER} "
+             f"— trained vs re-randomized", fontsize=11, color=INK, y=0.995)
 fig.legend(handles, SCORERS, loc="upper center", bbox_to_anchor=(0.5, 0.945),
            ncol=len(SCORERS), frameon=False, fontsize=9)
 fig.text(0.5, 0.005,
@@ -210,7 +215,7 @@ fig.text(0.5, 0.005,
          ha="center", fontsize=8, color=MUTED)
 fig.tight_layout(rect=(0, 0.035, 1, 0.94))
 
-out = os.path.join(HERE, "plots", f"pythia1b_L{LAYER}_auroc.png")
+out = os.path.join(HERE, "plots", f"pythia1b_L{LAYER}{os.environ.get('TAG', '')}_auroc.png")
 os.makedirs(os.path.dirname(out), exist_ok=True)
 fig.savefig(out, bbox_inches="tight")
 print(f"saved {out}")

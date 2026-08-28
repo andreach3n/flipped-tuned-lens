@@ -9,3 +9,8 @@ dictionary_learning/
 .env
 __pycache__/
 *.pyc
+
+# Extracted delphi result cells (~800 MB). Re-downloadable from
+# andreayhchen/pythia-1b-heap-replication with `hf_hub_download` + tarfile — see
+# SAE_linearmaps/randomized/pythia/README.md. The analysis scripts read them via RESULTS_DIR.
+SAE_linearmaps/randomized/pythia/delphi_results/
