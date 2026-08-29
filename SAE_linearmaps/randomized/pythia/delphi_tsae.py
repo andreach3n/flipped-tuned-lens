@@ -125,13 +125,63 @@ VERIFY = os.environ.get("TSAE_VERIFY", "0") == "1"
 # "500,500" -> take 500 latents from Matryoshka group 0 and 500 from group 1, and present them to
 # delphi as its latents 0..999. See _build_perm.
 SELECT = os.environ.get("TSAE_SELECT", "")
+# Density-aware selection. delphi's fuzz scorer samples 32-token windows and asserts it found at
+# least one where the latent NEVER fires (`assert len(record.not_active) > 0`). For a latent
+# firing on a fraction p of tokens the chance a window is firing-free is about (1-p)^32, so at
+# p=0.36 -- which the NON-temporal control produces -- that is 1.3e-6 and delphi dies mid-run.
+# More scoring tokens do not help: the probability is per-window, not per-corpus.
+#
+# So when firing counts from a previous pass over the SAME checkpoint are supplied, skip latents
+# denser than TSAE_MAX_DENSITY and take the first N *scoreable* ones per group instead. The
+# excluded ids are written into the map file: an SAE whose features fire on a third of all tokens
+# is a result about that SAE, not a nuisance to hide.
+COUNTS      = os.environ.get("TSAE_FIRING_COUNTS", "")   # log/hookpoint_firing_counts.pt
+COUNTS_MAP  = os.environ.get("TSAE_COUNTS_MAP", "")      # map json THAT RUN used, if it permuted
+MAX_DENSITY = float(os.environ.get("TSAE_MAX_DENSITY", 0.05))
 # Default ON, to match their trainer's hardcoded remove_bos=True. Set TSAE_DROP_POS0=0 only if you
 # also trained with remove_bos=False -- train and score must agree.
 DROP_POS0 = os.environ.get("TSAE_DROP_POS0", "1") == "1"
 _loaded = {}
 
 
-def _build_perm(sae, spec):
+def _load_densities(sae):
+    """Per-latent firing rate in REAL latent space, from a previous run's firing counts.
+
+    Two conversions matter and both are easy to get wrong:
+
+    1. If the run that produced the counts also permuted (TSAE_SELECT), its counts are indexed in
+       PERMUTED space -- counts[j] belongs to real latent perm[j]. The permutation is fully
+       determined by the `chosen` list plus dict_size, so it can be reconstructed from that run's
+       map file and inverted. Passing permuted counts as if they were real-space ones would
+       exclude the wrong latents, silently.
+    2. The token count is not recorded anywhere, so derive it: top-k fixes total firings at
+       k * n_tokens, hence n_tokens = sum(counts) / k. Printed so it can be sanity-checked
+       against the --n_tokens of the run that produced the file.
+    """
+    obj = t.load(COUNTS, weights_only=True, map_location="cpu")
+    v = list(obj.values())[0] if isinstance(obj, dict) else obj
+    counts = v.float()
+    if counts.numel() != sae.dict_size:
+        raise SystemExit(f"{COUNTS} has {counts.numel()} entries but the SAE has "
+                         f"{sae.dict_size} latents -- counts are from a different checkpoint.")
+
+    if COUNTS_MAP:
+        with open(COUNTS_MAP) as f:
+            chosen_then = json.load(f)["delphi_latent_to_real"]
+        rest = [i for i in range(sae.dict_size) if i not in set(chosen_then)]
+        perm_then = chosen_then + rest                      # permuted index j -> real perm[j]
+        real = t.zeros_like(counts)
+        real[t.tensor(perm_then, dtype=t.long)] = counts    # invert
+        counts = real
+        print(f"[delphi_tsae]   counts de-permuted via {COUNTS_MAP}")
+
+    n_tok = float(counts.sum()) / float(int(sae.k))
+    print(f"[delphi_tsae]   counts from {COUNTS}: implies ~{n_tok:,.0f} tokens "
+          f"(sum/k); densest latent {counts.max()/n_tok:.1%} of tokens")
+    return counts / n_tok
+
+
+def _build_perm(sae, spec, densities=None):
     """Column permutation so delphi's arange(N) lands on the latents we actually want.
 
     THE PROBLEM. delphi has exactly one latent-selection mechanism:
@@ -158,15 +208,24 @@ def _build_perm(sae, spec):
         raise SystemExit(f"TSAE_SELECT={spec!r} names {len(want)} groups but the SAE has "
                          f"{len(bounds)}")
     chosen: list[int] = []
+    excluded: list[int] = []
     for gi, n in enumerate(want):
         lo, hi = bounds[gi]
-        if n > hi - lo:
-            raise SystemExit(f"TSAE_SELECT asks for {n} latents from group {gi}, which holds "
-                             f"only {hi - lo}")
-        chosen.extend(range(lo, lo + n))
+        if densities is None:
+            pool = list(range(lo, hi))
+        else:
+            pool, drop = [], []
+            for i in range(lo, hi):
+                (pool if densities[i] <= MAX_DENSITY else drop).append(i)
+            excluded.extend(drop)
+        if n > len(pool):
+            raise SystemExit(f"group {gi} has only {len(pool)} latents below density "
+                             f"{MAX_DENSITY:.1%} but {n} were asked for; raise TSAE_MAX_DENSITY "
+                             f"or lower the count")
+        chosen.extend(pool[:n])
     rest = [i for i in range(sae.dict_size) if i not in set(chosen)]
     perm = t.tensor(chosen + rest, dtype=t.long, device=DEVICE)
-    return perm, chosen, bounds
+    return perm, chosen, bounds, excluded
 
 
 def _dense_latents(sae, x):
@@ -273,18 +332,30 @@ def _load(sparse_model_path, hookpoints):
               f"(active_groups={sae.active_groups}); anything above that is structurally dead "
               f"and will silently shrink your scored n.")
     if SELECT:
-        perm, chosen, bounds = _build_perm(sae, SELECT)
+        densities = _load_densities(sae) if COUNTS else None
+        perm, chosen, bounds, excluded = _build_perm(sae, SELECT, densities)
         _loaded["perm"], _loaded["chosen"] = perm, chosen
         per_group = ", ".join(
             f"g{gi}: {sum(1 for c in chosen if lo <= c < hi)}"
             for gi, (lo, hi) in enumerate(bounds))
         print(f"[delphi_tsae]   TSAE_SELECT={SELECT!r} -> delphi latents 0..{len(chosen) - 1} "
               f"are real latents {chosen[:3]}..{chosen[-3:]} ({per_group})")
+        if densities is not None:
+            drop_g = ", ".join(
+                f"g{gi}: {sum(1 for e in excluded if lo <= e < hi)}"
+                for gi, (lo, hi) in enumerate(bounds))
+            print(f"[delphi_tsae]   density filter <= {MAX_DENSITY:.1%}: excluded "
+                  f"{len(excluded)} latents ({drop_g}); densest kept "
+                  f"{max((float(densities[c]) for c in chosen), default=0):.2%}")
+            if excluded[:8]:
+                print(f"[delphi_tsae]   excluded ids (first 8): {excluded[:8]}")
         print(f"[delphi_tsae]   RUN WITH --max_latents {len(chosen)} to score exactly these.")
         out = os.environ.get("TSAE_MAP_OUT", "tsae_latent_map.json")
         with open(out, "w") as f:
             json.dump({"delphi_latent_to_real": chosen, "group_bounds": bounds,
-                       "select": SELECT, "sparse_model": sparse_model_path}, f)
+                       "select": SELECT, "sparse_model": sparse_model_path,
+                       "excluded_dense": excluded, "max_density": MAX_DENSITY,
+                       "counts_source": COUNTS or None}, f)
         print(f"[delphi_tsae]   mapping -> {out}  (analysis MUST translate ids through this)")
 
     _loaded["sae"], _loaded["cfg"] = sae, cfg
