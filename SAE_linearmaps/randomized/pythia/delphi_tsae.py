@@ -103,6 +103,9 @@ if importlib.util.find_spec("nnsight") is None:
     print("[delphi_tsae] nnsight not installed; stubbed it (training-only dependency)")
 
 try:
+    from dictionary_learning.trainers.matryoshka_batch_top_k import (
+        MatryoshkaBatchTopKSAE,
+    )
     from dictionary_learning.trainers.temporal_sequence_top_k import (
         TemporalMatryoshkaBatchTopKSAE,
     )
@@ -207,12 +210,24 @@ def load_tsae(sparse_model_path, device=None):
     with open(os.path.join(sparse_model_path, "config.json")) as f:
         cfg = json.load(f)
     tc = cfg["trainer"]
-    if tc.get("dict_class") != "TemporalMatryoshkaBatchTopKSAE":
-        raise SystemExit(f"{sparse_model_path} holds dict_class={tc.get('dict_class')!r}, not a "
-                         f"TemporalMatryoshkaBatchTopKSAE -- this launcher loads only T-SAEs.")
-    sae = TemporalMatryoshkaBatchTopKSAE.from_pretrained(
-        os.path.join(sparse_model_path, "ae.pt"),
-        k=tc["k"], temporal=tc["temporal"], device=device)
+    ae = os.path.join(sparse_model_path, "ae.pt")
+    dc = tc.get("dict_class")
+    # Both classes are accepted because the NON-temporal one is the control: same trainer, same
+    # Matryoshka groups, same k / dict_size / lr / remove_bos, differing only in whether the
+    # contrastive term exists. Scoring it through a different code path than the temporal cells
+    # would confound the very comparison it exists to make.
+    #
+    # Their interfaces are identical -- same encode(x, return_active, use_threshold), the same
+    # `threshold` buffer, the same group_indices/active_groups -- so everything downstream is
+    # shared. The only divergence is that from_pretrained takes no `temporal` kwarg.
+    if dc == "TemporalMatryoshkaBatchTopKSAE":
+        sae = TemporalMatryoshkaBatchTopKSAE.from_pretrained(
+            ae, k=tc["k"], temporal=tc["temporal"], device=device)
+    elif dc == "MatryoshkaBatchTopKSAE":
+        sae = MatryoshkaBatchTopKSAE.from_pretrained(ae, k=tc["k"], device=device)
+    else:
+        raise SystemExit(f"{sparse_model_path} holds dict_class={dc!r}; this launcher loads "
+                         f"TemporalMatryoshkaBatchTopKSAE or MatryoshkaBatchTopKSAE only.")
     return sae, cfg
 
 
