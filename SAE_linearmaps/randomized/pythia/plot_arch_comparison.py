@@ -1,32 +1,39 @@
-"""THE FIGURE: three SAE architectures on the same model, and the control that undercuts one.
+"""THE FIGURE: the trained-vs-random gap is set by DICTIONARY SIZE, not by the SAE codebase.
 
-WHAT THIS SHOWS. On pythia-1b layer 8 a plain top-k SAE and a skip-embed SAE both score the
-RANDOMIZED transformer as more interpretable than the trained one -- a reversal of Heap et al.,
-who report the two as indistinguishable. A temporal SAE flips the sign: trained 0.801 vs random
-0.626. That is the first architecture here that separates the arms in the direction the whole
-diagnostic programme assumes.
+WHAT THIS SHOWS, AND WHAT IT REPLACES. The earlier version of this figure said the flip came from
+switching codebases -- sparsify's plain top-k scored the RANDOMIZED pythia-1b as more interpretable
+than the trained one, while the temporal/non-temporal SAEs from AI4LIFE-GROUP scored it the other
+way. Six things differed between those two settings at once (BatchTopK vs per-token TopK,
+Matryoshka, d_sae 16384 vs 131072, ctx 256, position-0 masking, the trainer itself) and the
+non-temporal control only ruled out the seventh, the contrastive loss.
 
-WHY PANEL B EXISTS, AND WHY IT IS NOT AN AFTERTHOUGHT. The T-SAE is a Matryoshka SAE with a
-contrastive temporal loss applied to its HIGH-LEVEL group (latents [0..3275]); the low-level group
-[3276..] carries no such term. If the flip were caused by the temporal loss, the high-level half
-should separate the arms and the low-level half should not. Scoring 500 latents from each group --
-via a column permutation in delphi_tsae.py, since delphi's only selection mechanism is
-torch.arange(max_latents) -- gives +0.176 and +0.175. Indistinguishable. So the effect belongs to
-something the whole dictionary shares (BatchTopK vs per-token TopK, Matryoshka, d_sae 16384 vs
-131072, their trainer, or the position-0 masking) and NOT to the contrastive term.
+Training a sparsify top-k SAE at d_sae=16384 collapses all six to one. That run has none of the
+other five properties -- stock sparsify, per-token TopK, no Matryoshka, ctx 2048, no position-0
+mask -- and it flips harder than the temporal SAE did (+0.206). Sorting the panel by d_sae makes
+the pattern unmissable: the RANDOM arm sits at 0.808-0.826 in all four wide cells and at
+0.626-0.660 in all three narrow ones, across two independent codebases, while the trained arm
+stays at 0.80-0.87 wherever the SAE is not degenerate. Dictionary size moves the random
+transformer's apparent interpretability by ~0.17 AUROC; nothing else here moves it at all.
 
-Reporting panel A without panel B would be the single most misleading thing this project could
-publish, which is why they are one figure rather than two.
+WHY PANEL B STAYS. It was the control that killed the temporal explanation and it is still the
+cleanest single refutation of it: the contrastively-regularised Matryoshka group and the
+unregularised one separate the arms equally (+0.176 vs +0.175).
 
-Bars grow from 0.5 because that is chance for an AUROC; from zero, a 0.52 latent would look most
-of the way to a 0.85 one. Error bars are +/- 1 SE over LATENTS, the unit delphi samples -- not
-over individual judge decisions, which would understate them several-fold by treating ~100
-correlated decisions per latent as independent.
+THE ASTERISKED BAR. plain 2e-3 is the one cell that reproduces Heap et al. (+0.015), and it is
+not trustworthy: its trained SAE returned only 192 of 500 latents, because the other 308 fired too
+rarely to build windows (median 29 firings against 1,937 for the survivors). Since AUROC rises
+with firing rate in the trained arm, scoring only the healthiest third inflates it -- truncating
+the plain 1e-3 SAE to the same 38% moves it 0.626 -> 0.779, and to 25% moves it to 0.855, while
+the random arm is flat under identical truncation (0.808 -> 0.804). So that bar is survivorship,
+and it is marked rather than dropped because it is the cell the literature would quote.
 
-Colour means the ARM, the same as in every other figure in this project. Okabe-Ito, validated:
-adjacent-pair CVD separation dE 29.2 (protan) / 30.9 (tritan), normal-vision 36.2, all far above
-the 8 floor. The orange sits below 3:1 against the surface, so every bar carries a visible value
-label -- that is the required relief, not decoration.
+Bars grow from 0.5 because that is chance for an AUROC. Error bars are +/- 1 SE over LATENTS --
+the unit delphi samples. That is the WRONG denominator for a claim about trained-vs-random, which
+needs a between-SAE component this project does not yet have; see the caption.
+
+Colour means the ARM, as in every other figure here. Okabe-Ito, validated: adjacent-pair CVD
+separation dE 29.2 (protan) / 30.9 (tritan), normal-vision 36.2. The orange is below 3:1 against
+the surface, so every bar carries a visible value label -- required relief, not decoration.
 
     RESULTS_DIR=delphi_results python3 -u plot_arch_comparison.py
 """
@@ -43,29 +50,26 @@ import matplotlib.pyplot as plt  # noqa: E402
 ROOT   = os.environ.get("RESULTS_DIR", "delphi_results")
 SCORER = os.environ.get("SCORER", "fuzz")
 LAYER  = int(os.environ.get("LAYER", 8))
-LR     = os.environ.get("LR", "1e-3")          # the clean cell for plain / skip-embed
 SPLIT  = int(os.environ.get("SPLIT", 500))     # delphi latent < SPLIT is high-level
 
 BLUE, ORANGE, INK, MUTED, GRID = "#0072B2", "#E69F00", "#1a1a1a", "#666666", "#d9d9d9"
 ARM_COLOUR = {"trained": BLUE, "rand": ORANGE}
 ARMS = [("trained", "trained"), ("rand", "re-randomized")]
 
-# BOTH learning rates for plain and skip-embed, not just the clean one. At 2e-3 the plain gap is
-# +0.015 -- i.e. Heap et al. REPLICATING -- and showing only 1e-3's -0.183 would be displaying the
-# most anti-Heap cell available. The 2e-3 plain cell is separately known to be contaminated (192
-# trained latents vs 410 random, a selection artifact), but that belongs in the caption, not in a
-# decision about which bars to draw. The temporal result sits outside both, so nothing is lost.
-#
-# The LR is in every label because the temporal SAE runs at 3e-4 -- hardcoded in their trainer,
-# line 182 -- so it is not LR-matched to anything here, and that should be visible rather than
-# buried.
+# Ordered by dictionary size, which is the axis the result lives on. Within a block, ordered by
+# codebase then LR. The LR is in every label because the temporal and non-temporal runs are stuck
+# at 3e-4 (hardcoded in their trainer, line 182), so they are not LR-matched to the sparsify cells
+# and that should be visible rather than buried.
 ARCHS = [
-    ("plain top-k\n1e-3",  f"pythia1b_{{arm}}_L{LAYER}_lr1e-3"),
-    ("plain top-k\n2e-3",  f"pythia1b_{{arm}}_L{LAYER}_lr2e-3"),
-    ("skip-embed\n1e-3",   f"pythia1b_{{arm}}_resid_L{LAYER}_lr1e-3"),
-    ("skip-embed\n2e-3",   f"pythia1b_{{arm}}_resid_L{LAYER}_lr2e-3"),
-    ("temporal\n3e-4",     f"pythia1b_{{arm}}_tsae_L{LAYER}"),
+    ("plain top-k\n1e-3",   f"pythia1b_{{arm}}_L{LAYER}_lr1e-3",       131072),
+    ("plain top-k\n2e-3 *", f"pythia1b_{{arm}}_L{LAYER}_lr2e-3",       131072),
+    ("skip-embed\n1e-3",    f"pythia1b_{{arm}}_resid_L{LAYER}_lr1e-3", 131072),
+    ("skip-embed\n2e-3",    f"pythia1b_{{arm}}_resid_L{LAYER}_lr2e-3", 131072),
+    ("plain top-k\n2e-3",   f"pythia1b_{{arm}}_R8_L{LAYER}_lr2e-3",     16384),
+    ("temporal\n3e-4",      f"pythia1b_{{arm}}_tsae_L{LAYER}",          16384),
+    ("non-temporal\n3e-4",  f"pythia1b_{{arm}}_base_L{LAYER}",          16384),
 ]
+NWIDE = sum(1 for *_, d in ARCHS if d == 131072)      # where the d_sae divider goes
 TSAE = f"pythia1b_{{arm}}_tsae_L{LAYER}"
 
 
@@ -102,7 +106,7 @@ def stats(xs):
 
 # ---------------------------------------------------------------- compute
 A = {}                                    # panel A: (arch, arm) -> (mean, se, n)
-for name, fmt in ARCHS:
+for name, fmt, _ in ARCHS:
     for arm, _ in ARMS:
         A[(name, arm)] = stats(list(per_latent(fmt.format(arm=arm)).values()))
 
@@ -113,21 +117,21 @@ for arm, _ in ARMS:
     B[("low-level", arm)] = stats([v for k, v in d.items() if k >= SPLIT])
 
 print(f"\n{SCORER} AUROC, per-latent, clustered by latent (+/- 1 SE)\n")
-for label, D, keys in (("A  architectures", A, [n for n, _ in ARCHS]),
+for label, D, keys in (("A  architectures, by dictionary size", A, [n for n, *_ in ARCHS]),
                        ("B  temporal SAE, by Matryoshka group", B, ["high-level", "low-level"])):
     print(f"  {label}")
     for k in keys:
         mt, st, nt = D[(k, "trained")]
         mr, sr, nr = D[(k, "rand")]
         g, gse = mt - mr, math.sqrt(st ** 2 + sr ** 2)
-        print(f"    {k:<12} trained {mt:.3f}+/-{st:.3f} (n={nt:>3})  "
+        print(f"    {k.replace(chr(10), ' '):<18} trained {mt:.3f}+/-{st:.3f} (n={nt:>3})  "
               f"random {mr:.3f}+/-{sr:.3f} (n={nr:>3})  gap {g:+.3f}+/-{gse:.3f}  z={g/gse:6.2f}")
     print()
 
 # ---------------------------------------------------------------- figure
 fig, (axA, axB) = plt.subplots(
-    1, 2, figsize=(14.0, 5.6), dpi=200, sharey=True,
-    gridspec_kw={"width_ratios": [5, 2], "wspace": 0.06})
+    1, 2, figsize=(17.2, 6.0), dpi=200, sharey=True,
+    gridspec_kw={"width_ratios": [7, 2], "wspace": 0.05})
 
 W = 0.32
 
@@ -162,28 +166,50 @@ def draw(ax, D, keys, title):
     ax.tick_params(colors=MUTED, labelsize=9)
 
 
-draw(axA, A, [n for n, _ in ARCHS], "A   three SAE architectures, both learning rates where available")
-draw(axB, B, ["high-level", "low-level"],
-     "B   temporal SAE, split by Matryoshka group")
+draw(axA, A, [n for n, *_ in ARCHS], "")
+draw(axB, B, ["high-level", "low-level"], "")
 axB.spines["left"].set_visible(False)
 axB.tick_params(left=False)
 
+# The d_sae divider -- the only structure in panel A that matters. Headers sit ABOVE the axes in
+# blended coords (x in data, y in axes) so they cannot collide with the tallest bars' value labels,
+# which is exactly what happened when they lived at y=0.878 in data space.
+axA.axvline(NWIDE - 0.5, color=MUTED, lw=1.0, ls=(0, (4, 3)), zorder=1)
+blend = matplotlib.transforms.blended_transform_factory(axA.transData, axA.transAxes)
+for lo, hi, txt in ((-0.5, NWIDE - 0.5, "d_sae 131,072   (expansion 64×)  ·  sparsify"),
+                    (NWIDE - 0.5, len(ARCHS) - 0.5,
+                     "d_sae 16,384   (8×)  ·  sparsify | their trainer")):
+    axA.text((lo + hi) / 2, 1.015, txt, ha="center", va="bottom", fontsize=9.5, color=MUTED,
+             transform=blend, clip_on=False,
+             fontweight="bold" if "16,384" in txt else "normal")
+
+axA.text(0.0, 1.075, "A   every SAE trained on pythia-1b layer 8, ordered by dictionary size",
+         transform=axA.transAxes, fontsize=10.5, color=INK, ha="left")
+axB.text(0.0, 1.075, "B   temporal SAE, split by Matryoshka group",
+         transform=axB.transAxes, fontsize=10.5, color=INK, ha="left")
+
 axA.set_ylabel(f"{SCORER} AUROC   (0.5 = chance)", fontsize=10)
 axA.set_ylim(0.44, 0.90)
-axA.legend(frameon=False, fontsize=10, loc="upper left")
+axA.legend(frameon=False, fontsize=10, loc="upper left", bbox_to_anchor=(0.0, 0.97))
 
-fig.suptitle("A temporal SAE flips the trained-vs-random gap on pythia-1b — but not because of "
-             "the temporal loss",
-             fontsize=12, color=INK, y=1.00, x=0.5)
-fig.text(0.5, -0.07,
-         "Panel B is the control: the contrastive temporal loss acts only on the high-level "
-         "group, yet both groups separate the arms equally (+0.176 vs +0.175).\n"
-         "The plain 2e-3 cell is the one where Heap et al. replicates (gap +0.015) — but it "
-         "scored 192 trained latents against 410 random, a selection artifact.\n"
-         "So the flip comes from something the whole dictionary shares — BatchTopK vs per-token "
-         "TopK, Matryoshka, d_sae 16384 vs 131072, or the trainer — not from temporality.\n"
-         "pythia-1b layer 8 · delphi + Llama-3.1-70B · per-latent AUROC, ±1 SE over latents · "
-         "30M scoring tokens",
+fig.suptitle("Dictionary size — not the codebase, not the temporal loss — decides whether delphi "
+             "separates a trained transformer from a random one",
+             fontsize=12.5, color=INK, y=1.09, x=0.5)
+fig.text(0.5, -0.10,
+         "The re-randomized arm scores 0.808–0.826 in all four d_sae=131,072 cells and 0.626–0.660 "
+         "in all three d_sae=16,384 cells, across two independent codebases; the trained arm stays "
+         "0.80–0.87 wherever the SAE is not degenerate.\nThe narrow sparsify run is stock "
+         "per-token TopK with no Matryoshka, no BatchTopK, no contrastive term, ctx 2048 and no "
+         "position-0 mask, so it rules out every difference the non-temporal control left open. "
+         "Panel B rules out the last one:\nthe contrastively-regularised Matryoshka half and the "
+         "unregularised half separate the arms equally (+0.176 vs +0.175).   "
+         "* plain top-k 2e-3 is the one cell reproducing Heap et al. (+0.015) and is survivorship: "
+         "its trained SAE\nreturned 192/500 latents (dropped ones fired a median 29 times vs 1,937 "
+         "for survivors), and truncating the 1e-3 SAE to the same 38% moves it 0.626→0.779 while "
+         "the random arm is unmoved.   CAVEAT: error bars are ±1 SE over latents\nwithin a single "
+         "SAE per arm — they do not contain SAE-seed or randomization-seed variance, so they "
+         "understate the uncertainty on every gap shown.   pythia-1b layer 8 · delphi + "
+         "Llama-3.1-70B · 30M scoring tokens",
          ha="center", fontsize=8.5, color=MUTED)
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plots",
