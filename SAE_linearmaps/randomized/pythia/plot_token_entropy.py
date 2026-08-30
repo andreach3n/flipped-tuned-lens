@@ -28,7 +28,16 @@ one-word latent is honestly describable and trivially scorable. Narrow the dicti
 no room, so its latents blur across ~23 unrelated words and the score falls. The trained model is
 unaffected because its latents were never word detectors.
 
-LIMITS, same as the share figure: this does not explain the TRAINED arm's own AUROC spread
+THE LIMIT THAT IS SPECIFIC TO ENTROPY, and the reason the share figure remains the headline.
+Entropy from 50 draws is biased DOWNWARD -- you can never see more distinct tokens than you have
+examples, so log2(50) = 5.64 bits is a hard ceiling whatever the truth is. Rarefaction (in
+token_purity.py) shows the share has converged by n=50, moving +/-0.004 from n=40, while entropy
+is still climbing +0.069 to +0.204 per ten examples and is steepest exactly where entropy is
+highest. So every word count here is a FLOOR, loosest at the scattered end. That biases AGAINST
+the result -- the true 131,072-vs-16,384 gap is wider than the 2.34-to-4.55 shown -- but it means
+the axis supports the ORDERING and must not be quoted as a count.
+
+LIMITS shared with the share figure: this does not explain the TRAINED arm's own AUROC spread
 (0.606-0.866 at a flat ~4.1 bits), and peak entropy only sees the argmax token per example, so a
 bigram or context detector reads as high-entropy without being uninterpretable.
 
@@ -75,7 +84,7 @@ for ax, dsae, tag, ty in (
         v = pooled(arm, dsae)
         m = sum(v) / len(v)
         ax.stairs(hist_pct(v), EDGES, color=ARM_COLOUR[arm], lw=2.0, zorder=4,
-                  label=f"{ARM_LABEL[arm]}  (mean {m:.2f} bits ≈ {2**m:.0f} words)")
+                  label=f"{ARM_LABEL[arm]}  (mean {m:.2f} bits, ≥ {2**m:.0f} words)")
         ax.stairs(hist_pct(v), EDGES, color=ARM_COLOUR[arm], fill=True, alpha=0.20, zorder=3)
     # Title placed by hand above the secondary axis and its label; set_title(pad=...) collided
     # with the suptitle once the top axis was added.
@@ -96,7 +105,7 @@ for ax, dsae, tag, ty in (
     top.tick_params(colors=MUTED)
     top.spines["top"].set_color(GRID)
     if ax is axA:
-        top.set_xlabel("effective number of different words the latent fires on   (= 2 ^ bits)",
+        top.set_xlabel("effective number of different words the latent fires on   (= 2 ^ bits; a FLOOR — see caption)",
                        fontsize=9.5, color=INK, labelpad=6)
 
 axB.set_xlabel("peak-token entropy (bits)      0 = always the same word · "
@@ -118,11 +127,11 @@ for x, y, arm, dsae in pts:
 LEAD = dict(arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.8, shrinkA=2, shrinkB=6,
                             connectionstyle="arc3,rad=-0.15"))
 for tx, ty, ax_, ay_, txt, ha in (
-        (2.30, 0.900, 2.30, 0.830, "re-randomized, WIDE dictionary\n~5 words per latent, "
+        (2.30, 0.900, 2.30, 0.830, "re-randomized, WIDE dictionary\n≥5 words per latent, "
          "highest-scoring", "left"),
-        (3.55, 0.545, 4.60, 0.622, "re-randomized, NARROW — ~23 words per latent,\n"
+        (3.55, 0.545, 4.60, 0.622, "re-randomized, NARROW — ≥23 words per latent,\n"
          "down at the trained arm's floor", "left"),
-        (2.08, 0.700, 3.62, 0.742, "trained: ~17 words at BOTH sizes,\n"
+        (2.08, 0.700, 3.62, 0.742, "trained: ≥17 words at BOTH sizes,\n"
          "score still spans 0.61–0.87\n(what this does NOT explain)", "left")):
     axC.annotate(txt, xy=(ax_, ay_), xytext=(tx, ty), ha=ha, va="center",
                  fontsize=8.2, color=INK, zorder=6, **LEAD)
@@ -159,10 +168,10 @@ fig.suptitle("A wide SAE dictionary lets a random transformer spend one latent p
              fontsize=12.5, color=INK, y=1.10)
 fig.text(0.5, -0.11,
          f"Each latent is summarised by the entropy of the token it peaks on across its 50 "
-         f"activating examples; 2^entropy is the effective number of different words; random latent 12 fires on "
+         f"activating examples; 2^entropy is a FLOOR on the effective number of different words; random latent 12 fires on "
          f"' w' and nothing else (0 bits) while random latent 74 hits 50 different words in 50 examples (5.64). Shrinking "
-         f"the dictionary spreads the RANDOM model's latents from {hr:.2f} bits (~{2**hr:.0f} "
-         f"words) to {hr2:.2f} (~{2**hr2:.0f}),\nand leaves the TRAINED model where it was "
+         f"the dictionary spreads the RANDOM model's latents from {hr:.2f} bits (≥{2**hr:.0f} "
+         f"words) to {hr2:.2f} (≥{2**hr2:.0f}),\nand leaves the TRAINED model where it was "
          f"({ht:.2f} → {ht2:.2f}). Heap et al.'s randomization keeps the embedding table, so token "
          "identity is nearly all a random pythia has left, and a one-word latent is honestly "
          "describable and trivially scorable — a randomly drawn\nnon-activating window almost "
@@ -171,8 +180,11 @@ fig.text(0.5, -0.11,
          "detector with a noise tail\n('tech'×32 + 17 singletons, 2.40 bits) — both score 0.64 on "
          "share.   LIMITS: this does not explain the trained arm's own 0.61–0.87 spread at a flat "
          "~4.1 bits, and only the argmax token per example is used, so a bigram or context\n"
-         "detector reads as high-entropy without being uninterpretable. n = 7 cells per arm in C.  "
-         " pythia-1b layer 8 · delphi + Llama-3.1-70B · 30M scoring tokens · case/whitespace-folded",
+         "detector reads as high-entropy without being uninterpretable. n = 7 cells per arm in C.\n"
+         "WORD COUNTS ARE FLOORS: entropy from 50 draws cannot exceed log2(50) = 5.64 bits, and "
+         "rarefaction shows the share has converged by n=50 (±0.004 from n=40) while entropy is "
+         "still rising +0.07…+0.20 per ten examples,\nsteepest where entropy is highest — so the true gap is WIDER than shown, and this axis carries the ordering, not a count.   "
+         "pythia-1b layer 8 · delphi + Llama-3.1-70B · 30M scoring tokens · case/whitespace-folded",
          ha="center", fontsize=8.4, color=MUTED)
 
 out = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plots",

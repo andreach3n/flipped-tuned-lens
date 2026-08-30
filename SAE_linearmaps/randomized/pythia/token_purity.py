@@ -44,6 +44,7 @@ import glob
 import json
 import math
 import os
+import random
 import re
 from collections import Counter
 
@@ -245,9 +246,9 @@ print(f"{'arm':<8} {'d_sae':>9} {'n lat':>6}  {'all 50':>14} {'strongest 25':>14
 print("-" * 92)
 
 
-def by_strength(cell):
-    """per latent: (share_all, share_strong_half, share_weak_half) on folded peak tokens."""
-    rows = []
+def peak_pairs(cell):
+    """per latent: [(peak activation, peak token), ...] over its activating examples."""
+    out = []
     for f in sorted(glob.glob(f"{ROOT}/{cell}/scores/{SCORER}/*.txt")):
         ex = []
         for r in json.load(open(f)):
@@ -257,9 +258,21 @@ def by_strength(cell):
             if not t or not a or len(t) != len(a) or max(a) <= 0:
                 continue
             ex.append((max(a), t[a.index(max(a))]))
-        if len(ex) < MIN_EX:
-            continue
-        ex.sort(key=lambda p: -p[0])
+        if len(ex) >= MIN_EX:
+            out.append(ex)
+    return out
+
+
+def peak_lists(cell):
+    """per latent: the folded peak tokens alone -- what rarefaction resamples."""
+    return [[fold(t) for _, t in ex] for ex in peak_pairs(cell)]
+
+
+def by_strength(cell):
+    """per latent: (share_all, share_strong_half, share_weak_half) on folded peak tokens."""
+    rows = []
+    for ex in peak_pairs(cell):
+        ex = sorted(ex, key=lambda p: -p[0])
         h = len(ex) // 2
         sh = lambda s: Counter(fold(t) for _, t in s).most_common(1)[0][1] / len(s)
         rows.append((sh(ex), sh(ex[:h]), sh(ex[h:])))
@@ -278,3 +291,43 @@ for arm in ("trained", "rand"):
 print("  The strong-weak offset is the SAME size in all four blocks, and the arm x d_sae contrast\n"
       "  survives inside each stratum (random 131,072 - 16,384 is 0.348 among strong firings,\n"
       "  0.347 among weak, 0.325 overall), so the collapse is not a sampling artifact.")
+
+# ---------------------------------------------------------------- rarefaction
+# THE SECOND OBJECTION: 50 examples is a small sample for a distribution over tokens, and the two
+# statistics react to that very differently.
+#   SHARE is biased UP for a scattered latent -- the most common of 50 draws overstates the true
+#   most common probability -- but the bias dies quickly with n.
+#   ENTROPY is biased DOWN and dies slowly, because you can never observe more distinct tokens
+#   than you have draws: log2(50) = 5.64 bits is a hard ceiling regardless of the truth.
+# Recomputing each latent's statistic from a random n of its 50 shows whether either has settled.
+# It has not for entropy, so 2**H must be read as a FLOOR on the effective token count, and most
+# conservatively where H is largest. That biases AGAINST the result -- the true 131,072-vs-16,384
+# entropy gap is wider than the measured one -- but it is why the share is the safer headline.
+print("\n\nRAREFACTION  each latent's statistic recomputed from a random n of its 50 windows\n")
+NS, REPS = (10, 20, 30, 40, 50), 8
+random.seed(0)
+print(f"{'arm':<8} {'d_sae':>9} {'stat':<8} " + "".join(f"{'n=' + str(n):>9}" for n in NS)
+      + f"{'  50 vs 40':>11}")
+print("-" * 84)
+for arm in ("trained", "rand"):
+    for dsae in (131072, 16384):
+        pool = [p for lab, fmt, d in CELLS if d == dsae for p in peak_lists(fmt.format(a=arm))]
+        re_, rs_ = [], []
+        for n in NS:
+            es, ss = [], []
+            for p in pool:
+                for _ in range(REPS if n < 50 else 1):
+                    c = Counter(random.sample(p, n) if n < len(p) else p)
+                    es.append(entropy(list(c.values())))
+                    ss.append(c.most_common(1)[0][1] / n)
+            re_.append(sum(es) / len(es))
+            rs_.append(sum(ss) / len(ss))
+        print(f"{arm:<8} {dsae:>9,} {'entropy':<8} " + "".join(f"{v:>9.2f}" for v in re_)
+              + f"{re_[-1] - re_[-2]:>+11.3f}")
+        print(f"{'':<8} {'':>9} {'share':<8} " + "".join(f"{v:>9.3f}" for v in rs_)
+              + f"{rs_[-1] - rs_[-2]:>+11.3f}")
+    print()
+print("  SHARE has converged: +/-0.004 from n=40 to n=50 in every block, so 50 examples suffice.\n"
+      "  ENTROPY has NOT: still +0.069 to +0.204 per ten examples, steepest exactly where entropy\n"
+      "  is highest. Quote entropy for the ORDERING and quote 2**H as a lower bound, never as a\n"
+      "  count. The share is the statistic that survives this check.")
