@@ -55,11 +55,11 @@ PURE   = float(os.environ.get("PURE", 0.9))     # top-token share at/above which
 
 # (label, cell format, d_sae). Same ordering as plot_arch_comparison.py.
 CELLS = [
-    ("plain 1e-3",   "pythia1b_{a}_L8_lr1e-3",       131072),
-    ("plain 2e-3",   "pythia1b_{a}_L8_lr2e-3",       131072),
-    ("skipemb 1e-3", "pythia1b_{a}_resid_L8_lr1e-3", 131072),
-    ("skipemb 2e-3", "pythia1b_{a}_resid_L8_lr2e-3", 131072),
-    ("sparsify R=8", "pythia1b_{a}_R8_L8_lr2e-3",     16384),
+    ("top-k R64 1e-3",   "pythia1b_{a}_L8_lr1e-3",       131072),
+    ("top-k R64 2e-3",   "pythia1b_{a}_L8_lr2e-3",       131072),
+    ("skip-emb R64 1e-3", "pythia1b_{a}_resid_L8_lr1e-3", 131072),
+    ("skip-emb R64 2e-3", "pythia1b_{a}_resid_L8_lr2e-3", 131072),
+    ("top-k R8 2e-3", "pythia1b_{a}_R8_L8_lr2e-3",     16384),
     ("temporal",     "pythia1b_{a}_tsae_L8",          16384),
     ("non-temporal", "pythia1b_{a}_base_L8",          16384),
 ]

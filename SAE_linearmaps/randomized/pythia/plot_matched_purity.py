@@ -9,10 +9,13 @@ that the pattern holds broadly; they are not a controlled comparison.
 
 Exactly one pair in the project isolates d_sae:
 
-    plain top-k 2e-3  @ 131,072      sparsify, per-token TopK, ctx 2048, no p0 mask, lr 2e-3
-    plain top-k 2e-3  @  16,384      sparsify, per-token TopK, ctx 2048, no p0 mask, lr 2e-3
+    top-k R=64, lr 2e-3   d_sae 131,072   sparsify, per-token TopK, k=32, ctx 2048, no p0 mask
+    top-k R=8,  lr 2e-3   d_sae  16,384   sparsify, per-token TopK, k=32, ctx 2048, no p0 mask
 
-Same code, same architecture, same LR, same corpus, same scoring config. Only the dictionary.
+Both are the SAME recipe. R is the expansion factor and d_sae = R * d_model with d_model = 2048,
+so R=64 gives 131,072 latents and R=8 gives 16,384. Nothing else differs -- which is why the old
+labels ("plain top-k 2e-3" vs "sparsify R=8") were a mistake: they named one cell by architecture
+and the other by codebase+width, making one recipe at two sizes read as two different things.
 
 WHAT CHANGES WHEN YOU CONTROL. The random-arm collapse survives easily -- top-token share
 0.525 -> 0.298, z = 14.1 -- so the headline holds. But the TRAINED arm is no longer flat: it drops
@@ -52,12 +55,12 @@ ARM_COLOUR = {"trained": BLUE, "rand": ORANGE}
 ARM_LABEL = {"trained": "trained", "rand": "re-randomized"}
 ROOT = os.environ.get("RESULTS_DIR", "delphi_results")
 
-WIDE, NARROW = "plain 2e-3", "sparsify R=8"
-CELLFILE = {("plain 2e-3", "trained"): "pythia1b_trained_L8_lr2e-3",
-            ("plain 2e-3", "rand"): "pythia1b_rand_L8_lr2e-3",
-            ("sparsify R=8", "trained"): "pythia1b_trained_R8_L8_lr2e-3",
-            ("sparsify R=8", "rand"): "pythia1b_rand_R8_L8_lr2e-3",
-            ("plain 1e-3", "trained"): "pythia1b_trained_L8_lr1e-3"}
+WIDE, NARROW = "top-k R64 2e-3", "top-k R8 2e-3"
+CELLFILE = {("top-k R64 2e-3", "trained"): "pythia1b_trained_L8_lr2e-3",
+            ("top-k R64 2e-3", "rand"): "pythia1b_rand_L8_lr2e-3",
+            ("top-k R8 2e-3", "trained"): "pythia1b_trained_R8_L8_lr2e-3",
+            ("top-k R8 2e-3", "rand"): "pythia1b_rand_R8_L8_lr2e-3",
+            ("top-k R64 1e-3", "trained"): "pythia1b_trained_L8_lr1e-3"}
 NB = 16
 EDGES = [i / NB for i in range(NB + 1)]
 
@@ -92,8 +95,8 @@ gs = fig.add_gridspec(2, 2, width_ratios=[5, 4], hspace=0.46, wspace=0.20)
 axA, axB = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[1, 0])
 axC = fig.add_subplot(gs[:, 1])
 
-for ax, cell, tag in ((axA, WIDE, "A   d_sae 131,072  (expansion 64×)"),
-                      (axB, NARROW, "B   d_sae 16,384  (8×)  —  same code, same k, same lr 2e-3")):
+for ax, cell, tag in ((axA, WIDE, "A   R=64  →  d_sae 131,072"),
+                      (axB, NARROW, "B   R=8  →  d_sae 16,384   —   same recipe, only the expansion factor differs")):
     for arm in ("trained", "rand"):
         v = shares(cell, arm)
         m, se = tp.mean_se(v)
@@ -119,10 +122,10 @@ axA.tick_params(labelbottom=False)
 # ---------------------------------------------------------------- panel C, the survivorship control
 QS = [1.00, 0.75, 0.50, 0.38, 0.25, 0.15]
 DASH = (0, (5, 2))
-CURVES = [("plain 1e-3", "trained", BLUE, "-", "trained, WIDE (1e-3, 79% survived)"),
-          ("sparsify R=8", "trained", BLUE, DASH, "trained, narrow (91% survived)"),
-          ("plain 2e-3", "rand", ORANGE, "-", "random, WIDE (82% survived)"),
-          ("sparsify R=8", "rand", ORANGE, DASH, "random, narrow (96% survived)")]
+CURVES = [("top-k R64 1e-3", "trained", BLUE, "-", "trained, WIDE (1e-3, 79% survived)"),
+          ("top-k R8 2e-3", "trained", BLUE, DASH, "trained, narrow (91% survived)"),
+          ("top-k R64 2e-3", "rand", ORANGE, "-", "random, WIDE (82% survived)"),
+          ("top-k R8 2e-3", "rand", ORANGE, DASH, "random, narrow (96% survived)")]
 for cell, arm, col, ls, lab in CURVES:
     y, n = firing_curve(cell, arm, QS)
     axC.plot([100 * q for q in QS], y, color=col, ls=ls, lw=2.0, marker="o", ms=5,
@@ -132,8 +135,8 @@ for cell, arm, col, ls, lab in CURVES:
 obs = tp.mean_se(shares(WIDE, "trained"))[0]
 axC.scatter([38], [obs], s=150, marker="*", color=BLUE, zorder=6,
             edgecolor="white", linewidth=0.8)
-axC.annotate("plain 2e-3 trained actually\nscored 0.381 — but only its\ntop 38% by firing rate was\n"
-             "ever scored (192 of 500)",
+axC.annotate("R=64 trained actually scored\n0.381 — but only its top 38%\nby firing rate was ever\n"
+             "scored (192 of 500)",
              xy=(38, obs), xytext=(60, 0.437), ha="left", va="center", fontsize=8.2, color=INK,
              arrowprops=dict(arrowstyle="-", color=MUTED, lw=0.8,
                              shrinkA=2, shrinkB=8, connectionstyle="arc3,rad=0.2"))
@@ -160,9 +163,9 @@ zt = (tw - tn) / math.sqrt(tws ** 2 + tns ** 2)
 fig.suptitle("Controlled for everything but dictionary size: shrinking it collapses the RANDOM "
              "model's single-word latents", fontsize=12.5, color=INK, y=1.02)
 fig.text(0.5, -0.115,
-         f"The only pair in this project that varies d_sae alone — both are stock sparsify, "
-         f"per-token TopK, k=32, 100M tokens, lr 2e-3, ctx 2048, no position-0 mask, same corpus "
-         f"and same scoring config.\nRandom arm {mw:.3f} → {mn:.3f} (z = {zr:.1f}); trained arm "
+         f"The only pair in this project that varies d_sae alone — both are stock sparsify plain "
+         f"top-k, k=32, 100M tokens, lr 2e-3, ctx 2048, no position-0 mask, same corpus and same "
+         f"scoring config; R is the expansion factor and d_sae = R × 2048.\nRandom arm {mw:.3f} → {mn:.3f} (z = {zr:.1f}); trained arm "
          f"{tw:.3f} → {tn:.3f} (z = {zt:.1f}).   THE TRAINED NUMBER IS NOT SAFE TO QUOTE: its wide "
          f"cell returned only 192 of 500 latents (the rest fired under delphi's\n"
          f"min_examples=200), so it is a top-third-by-firing sample, and panel C shows purity rises "
